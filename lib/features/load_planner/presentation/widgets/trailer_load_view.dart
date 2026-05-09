@@ -144,6 +144,7 @@ class TrailerPainter extends CustomPainter {
     double scaleY,
   ) {
     final color = _colorFor(row.arrangement);
+    final label = _labelFor(row.arrangement);
 
     for (final p in _palletsFor(row.arrangement, xCm)) {
       // p = [xCm, yCm, wCm, hCm]
@@ -167,7 +168,52 @@ class TrailerPainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.0,
       );
+
+      if (label.isNotEmpty) _drawLabel(canvas, rect, label);
     }
+  }
+
+  String _labelFor(RowArrangement arrangement) {
+    switch (arrangement) {
+      case RowArrangement.euroLongi3:
+      case RowArrangement.euroTransverse2:
+      case RowArrangement.euroTransverseSingle:
+        return 'EPAL';
+      case RowArrangement.industryLongi2:
+      case RowArrangement.industrySingle:
+        return 'IND';
+    }
+  }
+
+  void _drawLabel(Canvas canvas, Rect rect, String label) {
+    const double minWidth = 20;
+    const double minHeight = 12;
+    if (rect.width < minWidth || rect.height < minHeight) return;
+
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: const TextStyle(
+          color: Colors.black54,
+          fontSize: 9,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+    textPainter.layout(maxWidth: rect.width);
+
+    if (textPainter.width > rect.width || textPainter.height > rect.height) {
+      return;
+    }
+
+    textPainter.paint(
+      canvas,
+      Offset(
+        rect.left + (rect.width - textPainter.width) / 2,
+        rect.top + (rect.height - textPainter.height) / 2,
+      ),
+    );
   }
 
   /// Gibt je Palette [x, y, w, h] in cm zurück.
