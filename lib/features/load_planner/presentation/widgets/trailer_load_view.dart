@@ -233,8 +233,13 @@ class TrailerPainter extends CustomPainter {
       image,
       srcRect,
       destRect,
-      // Alpha 0xE0 ≈ 88 % opacity; white RGB leaves image colours intact.
-      Paint()..color = const Color(0xE0FFFFFF),
+      // srcIn uses the image alpha as a mask and fills with near-black,
+      // so the stamp is always dark regardless of pallet colour behind it.
+      Paint()
+        ..colorFilter = const ColorFilter.mode(
+          Color(0xE0000000),
+          BlendMode.srcIn,
+        ),
     );
   }
 
