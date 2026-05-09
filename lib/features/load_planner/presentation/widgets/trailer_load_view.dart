@@ -233,8 +233,8 @@ class TrailerPainter extends CustomPainter {
       image,
       srcRect,
       destRect,
-      // Alpha 0xA8 ≈ 66 % opacity; white RGB leaves image colours intact.
-      Paint()..color = const Color(0xA8FFFFFF),
+      // Alpha 0xE0 ≈ 88 % opacity; white RGB leaves image colours intact.
+      Paint()..color = const Color(0xE0FFFFFF),
     );
   }
 
