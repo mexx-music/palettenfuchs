@@ -181,12 +181,11 @@ class TrailerPainter extends CustomPainter {
   /// Draws a small oval EPAL stamp centred on the pallet rect.
   /// Mimics a wood-burned brand: dark brown oval border + "EPAL" inside.
   void _drawEpalStamp(Canvas canvas, Rect palletRect) {
-    if (palletRect.width < 18 || palletRect.height < 12) return;
+    // Oval: always draw when pallet is at least 12 × 8 px.
+    if (palletRect.width < 12 || palletRect.height < 8) return;
 
-    // Stamp: 45 % of pallet width, 26 % of pallet height, capped.
     final stampW = (palletRect.width * 0.45).clamp(0.0, 38.0);
     final stampH = (palletRect.height * 0.26).clamp(0.0, 16.0);
-    if (stampW < 10 || stampH < 6) return;
 
     final stampRect = Rect.fromCenter(
       center: palletRect.center,
@@ -194,7 +193,6 @@ class TrailerPainter extends CustomPainter {
       height: stampH,
     );
 
-    // Oval border
     canvas.drawOval(
       stampRect,
       Paint()
@@ -203,8 +201,10 @@ class TrailerPainter extends CustomPainter {
         ..strokeWidth = 1.0,
     );
 
-    // "EPAL" text inside – font size scales with stamp, capped at 8 px.
-    final fontSize = (stampH * 0.52).clamp(4.5, 8.0);
+    // Text: draw when pallet is at least 16 × 10 px; minimum font size 4 px.
+    if (palletRect.width < 16 || palletRect.height < 10) return;
+
+    final fontSize = (stampH * 0.52).clamp(4.0, 8.0);
     final tp = TextPainter(
       text: TextSpan(
         text: 'EPAL',
@@ -216,18 +216,14 @@ class TrailerPainter extends CustomPainter {
       ),
       textDirection: TextDirection.ltr,
     );
-    tp.layout(maxWidth: stampW * 0.85);
-
-    // Only paint if the text fits comfortably inside the oval.
-    if (tp.width <= stampW * 0.88 && tp.height <= stampH * 0.75) {
-      tp.paint(
-        canvas,
-        Offset(
-          palletRect.center.dx - tp.width / 2,
-          palletRect.center.dy - tp.height / 2,
-        ),
-      );
-    }
+    tp.layout(maxWidth: stampW);
+    tp.paint(
+      canvas,
+      Offset(
+        palletRect.center.dx - tp.width / 2,
+        palletRect.center.dy - tp.height / 2,
+      ),
+    );
   }
 
   /// Gibt je Palette [x, y, w, h] in cm zurück.
