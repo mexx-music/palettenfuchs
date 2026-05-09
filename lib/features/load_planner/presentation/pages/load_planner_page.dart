@@ -10,7 +10,14 @@ import '../widgets/trailer_load_view.dart';
 import '../widgets/weight_panel.dart';
 
 class LoadPlannerPage extends StatefulWidget {
-  const LoadPlannerPage({super.key});
+  final AppLanguage language;
+  final ValueChanged<AppLanguage> onLanguageChanged;
+
+  const LoadPlannerPage({
+    super.key,
+    required this.language,
+    required this.onLanguageChanged,
+  });
 
   @override
   State<LoadPlannerPage> createState() => _LoadPlannerPageState();
@@ -24,7 +31,6 @@ class _LoadPlannerPageState extends State<LoadPlannerPage> {
   int _kgPerIndustry = 0;
   TrailerType _trailerType = TrailerType.standard;
   ManualLoadSeed _manualSeed = ManualLoadSeed.empty;
-  AppLanguage _language = AppLanguage.de;
   late LoadPlan _currentPlan;
 
   @override
@@ -71,7 +77,6 @@ class _LoadPlannerPageState extends State<LoadPlannerPage> {
   void _onKgPerEuroChanged(int value) {
     setState(() {
       _kgPerEuro = value;
-      // Gewicht beeinflusst die Achslast-Optimierung → Plan neu berechnen
       if (_optimizeAxleLoad) _updatePlan();
     });
   }
@@ -96,13 +101,14 @@ class _LoadPlannerPageState extends State<LoadPlannerPage> {
 
   @override
   Widget build(BuildContext context) {
+    final lang = widget.language;
     return Scaffold(
       appBar: AppBar(
-        title: Text(AppStrings.get(_language, 'app_title')),
+        title: Text(AppStrings.get(lang, 'app_title')),
         actions: [
           _LanguageDropdown(
-            selected: _language,
-            onChanged: (lang) => setState(() => _language = lang),
+            selected: lang,
+            onChanged: widget.onLanguageChanged,
           ),
         ],
       ),
@@ -111,7 +117,6 @@ class _LoadPlannerPageState extends State<LoadPlannerPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Eingabepanel für Paletten
             PalletInputPanel(
               euroPallets: _euroPallets,
               industryPallets: _industryPallets,
@@ -119,7 +124,7 @@ class _LoadPlannerPageState extends State<LoadPlannerPage> {
               kgPerEuro: _kgPerEuro,
               kgPerIndustry: _kgPerIndustry,
               trailerType: _trailerType,
-              language: _language,
+              language: lang,
               onEuroPalletsChanged: _onEuroPalletsChanged,
               onIndustryPalletsChanged: _onIndustryPalletsChanged,
               onOptimizeAxleLoadChanged: _onOptimizeAxleLoadChanged,
@@ -128,32 +133,24 @@ class _LoadPlannerPageState extends State<LoadPlannerPage> {
               onTrailerTypeChanged: _onTrailerTypeChanged,
             ),
             const SizedBox(height: 20),
-
-            // Manueller Ladeplan – vorbereitender Toggle
             _ManualSeedToggle(
               enabled: _manualSeed.enabled,
-              language: _language,
+              language: lang,
               onChanged: _onManualModeChanged,
             ),
             const SizedBox(height: 20),
-
-            // Trailerladung Draufsicht
             TrailerLoadView(
               loadPlan: _currentPlan,
-              language: _language,
+              language: lang,
             ),
             const SizedBox(height: 20),
-
-            // Gewichtspanel
             WeightPanel(
               loadPlan: _currentPlan,
               kgPerEuro: _kgPerEuro,
               kgPerIndustry: _kgPerIndustry,
-              language: _language,
+              language: lang,
             ),
-
             const SizedBox(height: 20),
-
           ],
         ),
       ),

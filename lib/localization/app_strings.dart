@@ -51,6 +51,13 @@ class AppStrings {
       'axle_warning': 'Achtung: Sattellast nähert sich dem Grenzbereich.',
       'overload_warning':
           'Ladefläche überschritten – bitte Anzahl reduzieren.',
+      'start_title': 'Paletten Fuchs',
+      'start_subtitle':
+          'Dein Ladeplan-Assistent für Sattelzüge',
+      'start_feature_load_plan': 'Ladefläche optimal planen',
+      'start_feature_axle_weight': 'Achslast berechnen',
+      'start_feature_manual_mode': 'Manuellen Ladeplan vorbereiten',
+      'start_button': 'App starten',
     },
 
     // -----------------------------------------------------------------------
@@ -92,6 +99,12 @@ class AppStrings {
           'Kingpin load likely too high – redistribute cargo rearward or check weight.',
       'axle_warning': 'Caution: Kingpin load approaching limit.',
       'overload_warning': 'Loading area exceeded – please reduce count.',
+      'start_title': 'Pallet Fox',
+      'start_subtitle': 'Your load planning assistant for semi-trailers',
+      'start_feature_load_plan': 'Plan the loading area optimally',
+      'start_feature_axle_weight': 'Calculate axle load',
+      'start_feature_manual_mode': 'Prepare a manual load plan',
+      'start_button': 'Start App',
     },
 
     // -----------------------------------------------------------------------
@@ -135,6 +148,12 @@ class AppStrings {
       'axle_warning':
           'Пажња: Оптерећење седлишта се приближава граници.',
       'overload_warning': 'Превазиђен простор за утовар – смањите број палета.',
+      'start_title': 'Paletten Fuchs',
+      'start_subtitle': 'Ваш асистент за планирање утовара',
+      'start_feature_load_plan': 'Оптимално планирање простора за утовар',
+      'start_feature_axle_weight': 'Израчунавање оптерећења осовине',
+      'start_feature_manual_mode': 'Припрема ручног плана утовара',
+      'start_button': 'Покрени апликацију',
     },
   };
 }
