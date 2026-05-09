@@ -15,6 +15,6 @@ void main() {
     await tester.pumpWidget(const PalettenFuchsApp());
 
     // Verify that the app title is displayed.
-    expect(find.text('Paletten Fuchs'), findsOneWidget);
+    expect(find.text('Pal Fuchs'), findsOneWidget);
   });
 }

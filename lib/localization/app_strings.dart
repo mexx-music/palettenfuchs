@@ -12,7 +12,7 @@ class AppStrings {
   static const _t = <AppLanguage, Map<String, String>>{
     // -----------------------------------------------------------------------
     AppLanguage.de: {
-      'app_title': 'Paletten Fuchs',
+      'app_title': 'Pal Fuchs',
       'trailer_type': 'Auflieger-Typ',
       'standard': 'Standard',
       'frigo': 'Frigo',
@@ -51,7 +51,7 @@ class AppStrings {
       'axle_warning': 'Achtung: Sattellast nähert sich dem Grenzbereich.',
       'overload_warning':
           'Ladefläche überschritten – bitte Anzahl reduzieren.',
-      'start_title': 'Paletten Fuchs',
+      'start_title': 'Pal Fuchs',
       'start_subtitle':
           'Dein Ladeplan-Assistent für Sattelzüge',
       'start_feature_load_plan': 'Ladefläche optimal planen',
@@ -109,7 +109,7 @@ class AppStrings {
 
     // -----------------------------------------------------------------------
     AppLanguage.sr: {
-      'app_title': 'Paletten Fuchs',
+      'app_title': 'Pal Fuchs',
       'trailer_type': 'Тип приколице',
       'standard': 'Стандард',
       'frigo': 'Фриго',
@@ -148,7 +148,7 @@ class AppStrings {
       'axle_warning':
           'Пажња: Оптерећење седлишта се приближава граници.',
       'overload_warning': 'Превазиђен простор за утовар – смањите број палета.',
-      'start_title': 'Paletten Fuchs',
+      'start_title': 'Pal Fuchs',
       'start_subtitle': 'Ваш асистент за планирање утовара',
       'start_feature_load_plan': 'Оптимално планирање простора за утовар',
       'start_feature_axle_weight': 'Израчунавање оптерећења осовине',

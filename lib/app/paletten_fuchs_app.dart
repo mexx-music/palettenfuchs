@@ -10,7 +10,7 @@ class PalettenFuchsApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Paletten Fuchs',
+      title: 'Pal Fuchs',
       theme: AppTheme.lightTheme,
       home: const _AppShell(),
     );

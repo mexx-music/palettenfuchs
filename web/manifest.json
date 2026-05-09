@@ -1,11 +1,11 @@
 {
-    "name": "Paletten Fuchs",
+    "name": "Pal Fuchs",
     "short_name": "PalFuchs",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#F7F3EA",
     "theme_color": "#F7F3EA",
-    "description": "Paletten Fuchs – Ladeplanung für Sattelzüge",
+    "description": "Pal Fuchs – Ladeplanung für Sattelzüge",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
