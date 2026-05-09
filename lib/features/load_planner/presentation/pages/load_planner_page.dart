@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../../../../app/app_language.dart';
+import 'package:palettenfuchs/localization/app_language.dart';
+import 'package:palettenfuchs/localization/app_strings.dart';
 import '../../logic/pallet_layout_engine.dart';
 import '../../logic/trailer_constants.dart';
 import '../../models/load_plan.dart';
@@ -97,7 +98,7 @@ class _LoadPlannerPageState extends State<LoadPlannerPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Paletten Fuchs'),
+        title: Text(AppStrings.get(_language, 'app_title')),
         actions: [
           _LanguageDropdown(
             selected: _language,
@@ -118,6 +119,7 @@ class _LoadPlannerPageState extends State<LoadPlannerPage> {
               kgPerEuro: _kgPerEuro,
               kgPerIndustry: _kgPerIndustry,
               trailerType: _trailerType,
+              language: _language,
               onEuroPalletsChanged: _onEuroPalletsChanged,
               onIndustryPalletsChanged: _onIndustryPalletsChanged,
               onOptimizeAxleLoadChanged: _onOptimizeAxleLoadChanged,
@@ -130,12 +132,16 @@ class _LoadPlannerPageState extends State<LoadPlannerPage> {
             // Manueller Ladeplan – vorbereitender Toggle
             _ManualSeedToggle(
               enabled: _manualSeed.enabled,
+              language: _language,
               onChanged: _onManualModeChanged,
             ),
             const SizedBox(height: 20),
 
             // Trailerladung Draufsicht
-            TrailerLoadView(loadPlan: _currentPlan),
+            TrailerLoadView(
+              loadPlan: _currentPlan,
+              language: _language,
+            ),
             const SizedBox(height: 20),
 
             // Gewichtspanel
@@ -143,7 +149,9 @@ class _LoadPlannerPageState extends State<LoadPlannerPage> {
               loadPlan: _currentPlan,
               kgPerEuro: _kgPerEuro,
               kgPerIndustry: _kgPerIndustry,
+              language: _language,
             ),
+
             const SizedBox(height: 20),
 
           ],
@@ -191,10 +199,12 @@ class _LanguageDropdown extends StatelessWidget {
 
 class _ManualSeedToggle extends StatelessWidget {
   final bool enabled;
+  final AppLanguage language;
   final ValueChanged<bool> onChanged;
 
   const _ManualSeedToggle({
     required this.enabled,
+    required this.language,
     required this.onChanged,
   });
 
@@ -210,7 +220,7 @@ class _ManualSeedToggle extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Manueller Ladeplan',
+                  AppStrings.get(language, 'manual_plan'),
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 Switch(value: enabled, onChanged: onChanged),
@@ -219,8 +229,7 @@ class _ManualSeedToggle extends StatelessWidget {
             if (enabled) ...[
               const SizedBox(height: 8),
               Text(
-                'Drag-and-Drop kommt später. '
-                'Aktuell wird nur die Engine vorbereitet.',
+                AppStrings.get(language, 'manual_plan_hint'),
                 style: Theme.of(context)
                     .textTheme
                     .bodySmall

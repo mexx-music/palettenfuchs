@@ -1,0 +1,140 @@
+import 'app_language.dart';
+
+/// Einfache schlüsselbasierte Übersetzungshilfe.
+/// Fallback-Kette: gewählte Sprache → Deutsch → Schlüssel.
+/// Nicht übersetzte Sprachen (no, da, pl, ro, bg, tr) nutzen automatisch DE.
+class AppStrings {
+  AppStrings._();
+
+  static String get(AppLanguage lang, String key) =>
+      _t[lang]?[key] ?? _t[AppLanguage.de]![key] ?? key;
+
+  static const _t = <AppLanguage, Map<String, String>>{
+    // -----------------------------------------------------------------------
+    AppLanguage.de: {
+      'app_title': 'Paletten Fuchs',
+      'trailer_type': 'Auflieger-Typ',
+      'standard': 'Standard',
+      'frigo': 'Frigo',
+      'optimize_axle_load': 'Achslast optimieren',
+      'optimize_axle_load_hint':
+          'Verteilt die Paletten so, dass die Ladefläche besser genutzt und die Achslast vorbereitet wird.',
+      'euro_pallet': 'Euro-Palette',
+      'industry_pallet': 'Industrie-Palette',
+      'quantity': 'Anzahl',
+      'optional_weight': 'Gewicht optional',
+      'trailer_top_view': 'Sattelzug Draufsicht',
+      'total_weight': 'Gesamtgewicht',
+      'front_load': 'Sattellast / Frontlast (ca.)',
+      'rear_load': 'Trailer-Hinterachse (ca.)',
+      'warning': 'Warnung',
+      'language': 'Sprache',
+      'pallets_enter': 'Paletten eingeben',
+      'load_status': 'Ladung Status',
+      'weights': 'Gewichte',
+      'axle_estimate': 'Achslast-Schätzung (Hebelmodell)',
+      'axle_note':
+          'Grobe Fahrerhilfe – kein rechtssicherer Wiegenachweis.',
+      'total_pallets': 'Gesamtpaletten',
+      'used_length': 'Genutzte Länge',
+      'free_length': 'Freie Länge',
+      'manual_plan': 'Manueller Ladeplan',
+      'manual_plan_hint':
+          'Drag-and-Drop kommt später. Aktuell wird nur die Engine vorbereitet.',
+      'enter_pallets': 'Geben Sie Paletten ein',
+      'capacity_used': 'ausgelastet',
+      'unplaced_warning': 'Nicht alle Paletten passen auf die Ladefläche.',
+      'unplaced_euro': 'Nicht platzierte Euro-Paletten',
+      'unplaced_industry': 'Nicht platzierte Industrie-Paletten',
+      'axle_critical':
+          'Sattellast wahrscheinlich zu hoch – Ladung weiter nach hinten verteilen oder Gewicht prüfen.',
+      'axle_warning': 'Achtung: Sattellast nähert sich dem Grenzbereich.',
+      'overload_warning':
+          'Ladefläche überschritten – bitte Anzahl reduzieren.',
+    },
+
+    // -----------------------------------------------------------------------
+    AppLanguage.en: {
+      'app_title': 'Pallet Fox',
+      'trailer_type': 'Trailer Type',
+      'standard': 'Standard',
+      'frigo': 'Frigo',
+      'optimize_axle_load': 'Optimize axle load',
+      'optimize_axle_load_hint':
+          'Distributes pallets to optimize trailer usage and prepare axle load.',
+      'euro_pallet': 'Euro Pallet',
+      'industry_pallet': 'Industrial Pallet',
+      'quantity': 'Quantity',
+      'optional_weight': 'Weight (optional)',
+      'trailer_top_view': 'Trailer Top View',
+      'total_weight': 'Total weight',
+      'front_load': 'Kingpin load (approx.)',
+      'rear_load': 'Rear axle (approx.)',
+      'warning': 'Warning',
+      'language': 'Language',
+      'pallets_enter': 'Enter Pallets',
+      'load_status': 'Load Status',
+      'weights': 'Weights',
+      'axle_estimate': 'Axle Load Estimate (lever model)',
+      'axle_note': 'Rough driver aid – not a certified weighing document.',
+      'total_pallets': 'Total pallets',
+      'used_length': 'Used length',
+      'free_length': 'Free length',
+      'manual_plan': 'Manual Load Plan',
+      'manual_plan_hint':
+          'Drag-and-drop coming soon. Engine preparation only.',
+      'enter_pallets': 'Enter pallet count above',
+      'capacity_used': 'capacity used',
+      'unplaced_warning': 'Not all pallets fit on the loading area.',
+      'unplaced_euro': 'Unplaced Euro pallets',
+      'unplaced_industry': 'Unplaced industrial pallets',
+      'axle_critical':
+          'Kingpin load likely too high – redistribute cargo rearward or check weight.',
+      'axle_warning': 'Caution: Kingpin load approaching limit.',
+      'overload_warning': 'Loading area exceeded – please reduce count.',
+    },
+
+    // -----------------------------------------------------------------------
+    AppLanguage.sr: {
+      'app_title': 'Paletten Fuchs',
+      'trailer_type': 'Тип приколице',
+      'standard': 'Стандард',
+      'frigo': 'Фриго',
+      'optimize_axle_load': 'Оптимизација осовинског оптерећења',
+      'optimize_axle_load_hint':
+          'Распоређује палете ради оптимизације употребе приколице и осовинског оптерећења.',
+      'euro_pallet': 'Еуро палета',
+      'industry_pallet': 'Индустријска палета',
+      'quantity': 'Количина',
+      'optional_weight': 'Тежина (опционо)',
+      'trailer_top_view': 'Приколица одозго',
+      'total_weight': 'Укупна тежина',
+      'front_load': 'Оптерећење предњег дела (прибл.)',
+      'rear_load': 'Задња осовина (прибл.)',
+      'warning': 'Упозорење',
+      'language': 'Језик',
+      'pallets_enter': 'Унос палета',
+      'load_status': 'Статус терета',
+      'weights': 'Тежине',
+      'axle_estimate': 'Процена оптерећења осовина (модел полуге)',
+      'axle_note':
+          'Оквирна помоћ возачу – није сертификована мерна документација.',
+      'total_pallets': 'Укупне палете',
+      'used_length': 'Коришћена дужина',
+      'free_length': 'Слободна дужина',
+      'manual_plan': 'Ручни план утовара',
+      'manual_plan_hint':
+          'Превлачење и испуштање долази касније. Тренутно само припрема.',
+      'enter_pallets': 'Унесите број палета',
+      'capacity_used': 'искоришћено',
+      'unplaced_warning': 'Нису све палете стале на простор за утовар.',
+      'unplaced_euro': 'Неpostављене еуро палете',
+      'unplaced_industry': 'Неpostављене индустријске палете',
+      'axle_critical':
+          'Оптерећење седлишта је вероватно превисоко – преместите терет или проверите тежину.',
+      'axle_warning':
+          'Пажња: Оптерећење седлишта се приближава граници.',
+      'overload_warning': 'Превазиђен простор за утовар – смањите број палета.',
+    },
+  };
+}

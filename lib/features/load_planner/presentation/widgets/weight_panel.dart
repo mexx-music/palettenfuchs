@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:palettenfuchs/localization/app_language.dart';
+import 'package:palettenfuchs/localization/app_strings.dart';
 import '../../logic/weight_engine.dart';
 import '../../models/load_plan.dart';
 import '../../models/pallet_type.dart';
@@ -7,12 +9,14 @@ class WeightPanel extends StatelessWidget {
   final LoadPlan loadPlan;
   final int kgPerEuro;
   final int kgPerIndustry;
+  final AppLanguage language;
 
   const WeightPanel({
     super.key,
     required this.loadPlan,
     required this.kgPerEuro,
     required this.kgPerIndustry,
+    required this.language,
   });
 
   int get _euroCount => loadPlan.rows
@@ -46,20 +50,21 @@ class WeightPanel extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Ladung Status',
+              AppStrings.get(language, 'load_status'),
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 16),
 
             // Paletten-Info
-            _infoRow(context, 'Gesamtpaletten:', '${loadPlan.totalPallets}',
+            _infoRow(context, '${AppStrings.get(language, 'total_pallets')}:',
+                '${loadPlan.totalPallets}',
                 bold: true),
             const SizedBox(height: 8),
 
             // Längen-Info
             _infoRow(
               context,
-              'Genutzte Länge:',
+              '${AppStrings.get(language, 'used_length')}:',
               '${loadPlan.usedLengthCm.toStringAsFixed(0)} cm',
               bold: true,
             ),
@@ -67,7 +72,7 @@ class WeightPanel extends StatelessWidget {
 
             _infoRow(
               context,
-              'Freie Länge:',
+              '${AppStrings.get(language, 'free_length')}:',
               '${loadPlan.remainingLengthCm.toStringAsFixed(0)} cm',
             ),
             const SizedBox(height: 16),
@@ -87,7 +92,7 @@ class WeightPanel extends StatelessWidget {
             const SizedBox(height: 8),
 
             Text(
-              '${percentUsed.toStringAsFixed(1)}% ausgelastet',
+              '${percentUsed.toStringAsFixed(1)}% ${AppStrings.get(language, 'capacity_used')}',
               style: Theme.of(context).textTheme.bodySmall,
             ),
 
@@ -110,7 +115,7 @@ class WeightPanel extends StatelessWidget {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Nicht alle Paletten passen auf die Ladefläche.',
+                            AppStrings.get(language, 'unplaced_warning'),
                             style: TextStyle(
                               color: Colors.red[700],
                               fontSize: 12,
@@ -123,14 +128,14 @@ class WeightPanel extends StatelessWidget {
                     if (loadPlan.unplacedEuroPallets > 0) ...[
                       const SizedBox(height: 4),
                       Text(
-                        'Nicht platzierte Euro-Paletten: ${loadPlan.unplacedEuroPallets}',
+                        '${AppStrings.get(language, 'unplaced_euro')}: ${loadPlan.unplacedEuroPallets}',
                         style: TextStyle(color: Colors.red[700], fontSize: 12),
                       ),
                     ],
                     if (loadPlan.unplacedIndustryPallets > 0) ...[
                       const SizedBox(height: 4),
                       Text(
-                        'Nicht platzierte Industrie-Paletten: ${loadPlan.unplacedIndustryPallets}',
+                        '${AppStrings.get(language, 'unplaced_industry')}: ${loadPlan.unplacedIndustryPallets}',
                         style: TextStyle(color: Colors.red[700], fontSize: 12),
                       ),
                     ],
@@ -145,27 +150,30 @@ class WeightPanel extends StatelessWidget {
               const Divider(),
               const SizedBox(height: 4),
               Text(
-                'Gewichte',
+                AppStrings.get(language, 'weights'),
                 style: Theme.of(context).textTheme.titleSmall,
               ),
               const SizedBox(height: 8),
-              _infoRow(context, 'Euro-Paletten:', '$euroWeight kg'),
+              _infoRow(context,
+                  '${AppStrings.get(language, 'euro_pallet')}:', '$euroWeight kg'),
               const SizedBox(height: 6),
-              _infoRow(context, 'Industrie-Paletten:', '$industryWeight kg'),
+              _infoRow(context,
+                  '${AppStrings.get(language, 'industry_pallet')}:', '$industryWeight kg'),
               const SizedBox(height: 6),
-              _infoRow(context, 'Gesamtgewicht:', '$totalWeight kg',
+              _infoRow(context,
+                  '${AppStrings.get(language, 'total_weight')}:', '$totalWeight kg',
                   bold: true),
 
               const SizedBox(height: 16),
               const Divider(),
               const SizedBox(height: 4),
               Text(
-                'Achslast-Schätzung (Hebelmodell)',
+                AppStrings.get(language, 'axle_estimate'),
                 style: Theme.of(context).textTheme.titleSmall,
               ),
               const SizedBox(height: 4),
               Text(
-                'Grobe Fahrerhilfe – kein rechtssicherer Wiegenachweis.',
+                AppStrings.get(language, 'axle_note'),
                 style: Theme.of(context)
                     .textTheme
                     .bodySmall
@@ -183,14 +191,14 @@ class WeightPanel extends StatelessWidget {
                   children: [
                     _infoRow(
                       context,
-                      'Sattellast / Frontlast (ca.):',
+                      '${AppStrings.get(language, 'front_load')}:',
                       '${dist.frontLoadKg.round()} kg'
                           ' (${dist.frontPercent.toStringAsFixed(1)} %)',
                     ),
                     const SizedBox(height: 6),
                     _infoRow(
                       context,
-                      'Trailer-Hinterachse (ca.):',
+                      '${AppStrings.get(language, 'rear_load')}:',
                       '${dist.rearLoadKg.round()} kg'
                           ' (${dist.rearPercent.toStringAsFixed(1)} %)',
                     ),
@@ -200,9 +208,7 @@ class WeightPanel extends StatelessWidget {
                         context,
                         color: Colors.red,
                         icon: Icons.warning,
-                        message:
-                            'Sattellast wahrscheinlich zu hoch – Ladung weiter'
-                            ' nach hinten verteilen oder Gewicht prüfen.',
+                        message: AppStrings.get(language, 'axle_critical'),
                       ),
                     ] else if (dist.isFrontWarning) ...[
                       const SizedBox(height: 10),
@@ -210,8 +216,7 @@ class WeightPanel extends StatelessWidget {
                         context,
                         color: Colors.orange,
                         icon: Icons.warning_amber,
-                        message:
-                            'Achtung: Sattellast nähert sich dem Grenzbereich.',
+                        message: AppStrings.get(language, 'axle_warning'),
                       ),
                     ],
                   ],
@@ -235,7 +240,7 @@ class WeightPanel extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Ladefläche überschritten – bitte Anzahl reduzieren.',
+                        AppStrings.get(language, 'overload_warning'),
                         style: TextStyle(color: Colors.red[700], fontSize: 12),
                       ),
                     ),

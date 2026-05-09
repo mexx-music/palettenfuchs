@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:palettenfuchs/localization/app_language.dart';
+import 'package:palettenfuchs/localization/app_strings.dart';
 import '../../models/load_plan.dart';
 import '../../models/load_row.dart';
 import '../../models/pallet_type.dart';
 
 class TrailerLoadView extends StatelessWidget {
   final LoadPlan loadPlan;
+  final AppLanguage language;
 
   const TrailerLoadView({
     super.key,
     required this.loadPlan,
+    required this.language,
   });
 
   @override
@@ -20,7 +24,7 @@ class TrailerLoadView extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Sattelzug Draufsicht',
+              AppStrings.get(language, 'trailer_top_view'),
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 16),
@@ -28,7 +32,10 @@ class TrailerLoadView extends StatelessWidget {
             SizedBox(
               height: 250,
               child: CustomPaint(
-                painter: TrailerPainter(loadPlan: loadPlan),
+                painter: TrailerPainter(
+                  loadPlan: loadPlan,
+                  emptyText: AppStrings.get(language, 'enter_pallets'),
+                ),
                 child: const SizedBox.expand(),
               ),
             ),
@@ -47,8 +54,12 @@ class TrailerLoadView extends StatelessWidget {
 
 class TrailerPainter extends CustomPainter {
   final LoadPlan loadPlan;
+  final String emptyText;
 
-  const TrailerPainter({required this.loadPlan});
+  const TrailerPainter({
+    required this.loadPlan,
+    this.emptyText = '',
+  });
 
   static const double _padding = 20.0;
 
@@ -214,9 +225,9 @@ class TrailerPainter extends CustomPainter {
 
   void _drawEmptyState(Canvas canvas, Size size) {
     final textPainter = TextPainter(
-      text: const TextSpan(
-        text: 'Geben Sie Paletten ein',
-        style: TextStyle(color: Colors.grey, fontSize: 16),
+      text: TextSpan(
+        text: emptyText,
+        style: const TextStyle(color: Colors.grey, fontSize: 16),
       ),
       textDirection: TextDirection.ltr,
     );
@@ -232,5 +243,5 @@ class TrailerPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(TrailerPainter oldDelegate) =>
-      loadPlan != oldDelegate.loadPlan;
+      loadPlan != oldDelegate.loadPlan || emptyText != oldDelegate.emptyText;
 }
