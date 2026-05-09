@@ -63,6 +63,9 @@ class TrailerPainter extends CustomPainter {
 
   static const double _padding = 20.0;
 
+  // Dark brown at ~41 % opacity – simulates a wood-burned EPAL stamp.
+  static const Color _epalStampColor = Color(0x69503214);
+
   @override
   void paint(Canvas canvas, Size size) {
     final trailerLengthCm = loadPlan.trailerType.trailerLengthCm;
@@ -144,7 +147,9 @@ class TrailerPainter extends CustomPainter {
     double scaleY,
   ) {
     final color = _colorFor(row.arrangement);
-    final label = _labelFor(row.arrangement);
+    final isEuro = row.arrangement == RowArrangement.euroLongi3 ||
+        row.arrangement == RowArrangement.euroTransverse2 ||
+        row.arrangement == RowArrangement.euroTransverseSingle;
 
     for (final p in _palletsFor(row.arrangement, xCm)) {
       // p = [xCm, yCm, wCm, hCm]
@@ -169,51 +174,60 @@ class TrailerPainter extends CustomPainter {
           ..strokeWidth = 1.0,
       );
 
-      if (label.isNotEmpty) _drawLabel(canvas, rect, label);
+      if (isEuro) _drawEpalStamp(canvas, rect);
     }
   }
 
-  String _labelFor(RowArrangement arrangement) {
-    switch (arrangement) {
-      case RowArrangement.euroLongi3:
-      case RowArrangement.euroTransverse2:
-      case RowArrangement.euroTransverseSingle:
-        return 'EPAL';
-      case RowArrangement.industryLongi2:
-      case RowArrangement.industrySingle:
-        return 'IND';
-    }
-  }
+  /// Draws a small oval EPAL stamp centred on the pallet rect.
+  /// Mimics a wood-burned brand: dark brown oval border + "EPAL" inside.
+  void _drawEpalStamp(Canvas canvas, Rect palletRect) {
+    if (palletRect.width < 18 || palletRect.height < 12) return;
 
-  void _drawLabel(Canvas canvas, Rect rect, String label) {
-    const double minWidth = 20;
-    const double minHeight = 12;
-    if (rect.width < minWidth || rect.height < minHeight) return;
+    // Stamp: 45 % of pallet width, 26 % of pallet height, capped.
+    final stampW = (palletRect.width * 0.45).clamp(0.0, 38.0);
+    final stampH = (palletRect.height * 0.26).clamp(0.0, 16.0);
+    if (stampW < 10 || stampH < 6) return;
 
-    final textPainter = TextPainter(
+    final stampRect = Rect.fromCenter(
+      center: palletRect.center,
+      width: stampW,
+      height: stampH,
+    );
+
+    // Oval border
+    canvas.drawOval(
+      stampRect,
+      Paint()
+        ..color = _epalStampColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.0,
+    );
+
+    // "EPAL" text inside – font size scales with stamp, capped at 8 px.
+    final fontSize = (stampH * 0.52).clamp(4.5, 8.0);
+    final tp = TextPainter(
       text: TextSpan(
-        text: label,
-        style: const TextStyle(
-          color: Colors.black54,
-          fontSize: 9,
+        text: 'EPAL',
+        style: TextStyle(
+          color: _epalStampColor,
+          fontSize: fontSize,
           fontWeight: FontWeight.bold,
         ),
       ),
       textDirection: TextDirection.ltr,
     );
-    textPainter.layout(maxWidth: rect.width);
+    tp.layout(maxWidth: stampW * 0.85);
 
-    if (textPainter.width > rect.width || textPainter.height > rect.height) {
-      return;
+    // Only paint if the text fits comfortably inside the oval.
+    if (tp.width <= stampW * 0.88 && tp.height <= stampH * 0.75) {
+      tp.paint(
+        canvas,
+        Offset(
+          palletRect.center.dx - tp.width / 2,
+          palletRect.center.dy - tp.height / 2,
+        ),
+      );
     }
-
-    textPainter.paint(
-      canvas,
-      Offset(
-        rect.left + (rect.width - textPainter.width) / 2,
-        rect.top + (rect.height - textPainter.height) / 2,
-      ),
-    );
   }
 
   /// Gibt je Palette [x, y, w, h] in cm zurück.
