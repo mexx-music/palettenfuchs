@@ -6,7 +6,6 @@ import '../../models/manual_load_seed.dart';
 import '../widgets/pallet_input_panel.dart';
 import '../widgets/trailer_load_view.dart';
 import '../widgets/weight_panel.dart';
-import '../widgets/variant_grid.dart';
 
 class LoadPlannerPage extends StatefulWidget {
   const LoadPlannerPage({super.key});
@@ -139,8 +138,6 @@ class _LoadPlannerPageState extends State<LoadPlannerPage> {
             ),
             const SizedBox(height: 20),
 
-            // Varianten-Grid
-            const VariantGrid(),
           ],
         ),
       ),
