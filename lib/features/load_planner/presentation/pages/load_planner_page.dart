@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../../app/app_language.dart';
 import '../../logic/pallet_layout_engine.dart';
 import '../../logic/trailer_constants.dart';
 import '../../models/load_plan.dart';
@@ -22,6 +23,7 @@ class _LoadPlannerPageState extends State<LoadPlannerPage> {
   int _kgPerIndustry = 0;
   TrailerType _trailerType = TrailerType.standard;
   ManualLoadSeed _manualSeed = ManualLoadSeed.empty;
+  AppLanguage _language = AppLanguage.de;
   late LoadPlan _currentPlan;
 
   @override
@@ -96,6 +98,12 @@ class _LoadPlannerPageState extends State<LoadPlannerPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Paletten Fuchs'),
+        actions: [
+          _LanguageDropdown(
+            selected: _language,
+            onChanged: (lang) => setState(() => _language = lang),
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -139,6 +147,42 @@ class _LoadPlannerPageState extends State<LoadPlannerPage> {
             const SizedBox(height: 20),
 
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LanguageDropdown extends StatelessWidget {
+  final AppLanguage selected;
+  final ValueChanged<AppLanguage> onChanged;
+
+  const _LanguageDropdown({
+    required this.selected,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<AppLanguage>(
+          value: selected,
+          icon: const SizedBox.shrink(),
+          style: Theme.of(context)
+              .textTheme
+              .bodyMedium
+              ?.copyWith(color: Theme.of(context).colorScheme.onSurface),
+          items: AppLanguage.values
+              .map((lang) => DropdownMenuItem<AppLanguage>(
+                    value: lang,
+                    child: Text(lang.code),
+                  ))
+              .toList(),
+          onChanged: (lang) {
+            if (lang != null) onChanged(lang);
+          },
         ),
       ),
     );
