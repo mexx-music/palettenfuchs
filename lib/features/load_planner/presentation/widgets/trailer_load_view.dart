@@ -185,8 +185,9 @@ class _TrailerLoadViewState extends State<TrailerLoadView> {
 }
 
 // ---------------------------------------------------------------------------
-// Stateful overlay with palette selection (red border on tap).
-// Layout mirrors TrailerLoadOverlay, extended with GestureDetector + state.
+// Stateful overlay: tap = select/deselect (red border),
+//                   long-press on selection = action menu.
+// Layout mirrors TrailerLoadOverlay.
 // ---------------------------------------------------------------------------
 class _SelectableTrailerOverlay extends StatefulWidget {
   final LoadPlan loadPlan;
@@ -205,44 +206,165 @@ class _SelectableTrailerOverlay extends StatefulWidget {
 }
 
 class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
-  final Set<String> _selectedIds = {};
+  // Mutable local copy – updated when service actions rearrange rows.
+  late LoadPlan _loadPlan;
   late List<PlacedPallet> _pallets;
+  final Set<String> _selectedIds = {};
+
+  // Stores the palette hit in onTapDown; consumed by onTap or discarded by
+  // onLongPress so the two gesture paths stay independent.
+  PlacedPallet? _pendingPallet;
 
   @override
   void initState() {
     super.initState();
-    _pallets = ManualPalletService.extractPlacedPallets(widget.loadPlan);
+    _loadPlan = widget.loadPlan;
+    _pallets = ManualPalletService.extractPlacedPallets(_loadPlan);
   }
 
-  // LayoutBuilder liefert die exakte CustomPaint-Größe synchron –
-  // kein GlobalKey-Null-Risiko, kein falscher Dialog-Kontext.
-  Widget _buildTrailerArea() {
+  // ---- helpers --------------------------------------------------------------
+
+  int get _firstSelectedRowIndex {
+    if (_selectedIds.isEmpty) return -1;
+    return int.parse(_selectedIds.first.split('_').first);
+  }
+
+  void _refreshPallets() {
+    _pallets = ManualPalletService.extractPlacedPallets(_loadPlan);
+  }
+
+  // ---- action menu ----------------------------------------------------------
+
+  void _showActionMenu(BuildContext ctx) {
+    if (_selectedIds.isEmpty) return;
+    final rowIndex = _firstSelectedRowIndex;
+    if (rowIndex < 0 || rowIndex >= _loadPlan.rows.length) return;
+
+    final row = _loadPlan.rows[rowIndex];
+    final canMoveForward = rowIndex > 0;
+    final canMoveBackward = rowIndex < _loadPlan.rows.length - 1;
+    // toString check avoids importing pallet_type.dart.
+    final canRotate = row.arrangement.toString().contains('euro');
+
+    showModalBottomSheet<void>(
+      context: ctx,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _actionTile(
+              icon: Icons.arrow_back,
+              label: AppStrings.get(widget.language, 'pallet_move_forward'),
+              enabled: canMoveForward,
+              onTap: () {
+                Navigator.of(ctx).pop();
+                setState(() {
+                  _loadPlan =
+                      ManualPalletService.moveRowForward(_loadPlan, rowIndex);
+                  _refreshPallets();
+                  _selectedIds.clear();
+                });
+              },
+            ),
+            _actionTile(
+              icon: Icons.arrow_forward,
+              label: AppStrings.get(widget.language, 'pallet_move_backward'),
+              enabled: canMoveBackward,
+              onTap: () {
+                Navigator.of(ctx).pop();
+                setState(() {
+                  _loadPlan =
+                      ManualPalletService.moveRowBackward(_loadPlan, rowIndex);
+                  _refreshPallets();
+                  _selectedIds.clear();
+                });
+              },
+            ),
+            _actionTile(
+              icon: Icons.rotate_right,
+              label: AppStrings.get(widget.language, 'pallet_rotate'),
+              enabled: canRotate,
+              onTap: () {
+                Navigator.of(ctx).pop();
+                final (success, errorMsg) =
+                    ManualPalletService.tryRotatePallet(_loadPlan, rowIndex);
+                if (!success) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    SnackBar(
+                        content:
+                            Text(errorMsg ?? 'Rotation nicht möglich')),
+                  );
+                }
+              },
+            ),
+            _actionTile(
+              icon: Icons.clear,
+              label:
+                  AppStrings.get(widget.language, 'pallet_clear_selection'),
+              enabled: true,
+              onTap: () {
+                Navigator.of(ctx).pop();
+                setState(() => _selectedIds.clear());
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _actionTile({
+    required IconData icon,
+    required String label,
+    required bool enabled,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      leading: Icon(icon, color: enabled ? null : Colors.grey),
+      title:
+          Text(label, style: TextStyle(color: enabled ? null : Colors.grey)),
+      onTap: enabled ? onTap : null,
+    );
+  }
+
+  // ---- trailer area ---------------------------------------------------------
+
+  // outerContext: the State's build context, used for showModalBottomSheet
+  // and ScaffoldMessenger – both require a context with a Navigator ancestor.
+  Widget _buildTrailerArea(BuildContext outerContext) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = constraints.biggest;
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
+          // onTapDown records which palette was hit; onTap applies the
+          // toggle; onLongPress discards the pending hit and shows the menu.
           onTapDown: (details) {
-            final localPosition = details.localPosition;
-            debugPrint('tap: $localPosition | pallets: ${_pallets.length}');
+            final pos = details.localPosition;
+            debugPrint('tap: $pos | pallets: ${_pallets.length}');
             if (_pallets.isNotEmpty) {
               final last = _pallets.last;
               final lastRect = ManualPalletService.calculatePalletScreenRect(
                 pallet: last,
-                loadPlan: widget.loadPlan,
+                loadPlan: _loadPlan,
                 trailerWidth: size.width,
                 trailerHeight: size.height,
               );
               debugPrint('last pallet: ${last.id} rect: $lastRect');
             }
-            final pallet = ManualPalletService.findPalletAtPosition(
-              position: localPosition,
+            _pendingPallet = ManualPalletService.findPalletAtPosition(
+              position: pos,
               pallets: _pallets,
-              loadPlan: widget.loadPlan,
+              loadPlan: _loadPlan,
               trailerWidth: size.width,
               trailerHeight: size.height,
             );
-            debugPrint('hit: ${pallet?.id}');
+            debugPrint('hit: ${_pendingPallet?.id}');
+          },
+          onTap: () {
+            final pallet = _pendingPallet;
+            _pendingPallet = null;
             if (pallet == null) return;
             setState(() {
               if (_selectedIds.contains(pallet.id)) {
@@ -252,9 +374,15 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
               }
             });
           },
+          // Long-press shows the action menu only when ≥1 palette is marked.
+          onLongPress: () {
+            _pendingPallet = null; // discard pending tap
+            if (_selectedIds.isEmpty) return;
+            _showActionMenu(outerContext);
+          },
           child: CustomPaint(
             painter: TrailerPainter(
-              loadPlan: widget.loadPlan,
+              loadPlan: _loadPlan,
               emptyText: AppStrings.get(widget.language, 'enter_pallets'),
               epalImage: widget.epalImage,
               selectedPalletIds: _selectedIds,
@@ -266,6 +394,8 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
     );
   }
 
+  // ---- build ----------------------------------------------------------------
+
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
@@ -274,8 +404,8 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
     final isPortrait = sh > sw;
     final scheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final trailerL = widget.loadPlan.trailerType.trailerLengthCm;
-    final trailerW = widget.loadPlan.trailerType.trailerWidthCm;
+    final trailerL = _loadPlan.trailerType.trailerLengthCm;
+    final trailerW = _loadPlan.trailerType.trailerWidthCm;
 
     if (isPortrait) {
       // Rotate entire panel 90° CW so the trailer appears in landscape.
@@ -303,7 +433,8 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
                         RotatedBox(
                           quarterTurns: 3,
                           child: Text(
-                            AppStrings.get(widget.language, 'trailer_enlarged'),
+                            AppStrings.get(
+                                widget.language, 'trailer_enlarged'),
                             style: textTheme.titleSmall,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -321,11 +452,11 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
                     ),
                   ),
                   Container(width: 1, color: scheme.outlineVariant),
-                  // Centre: trailer graphic with selection.
+                  // Centre: trailer graphic with selection + long-press menu.
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.all(10),
-                      child: _buildTrailerArea(),
+                      child: _buildTrailerArea(context),
                     ),
                   ),
                   Container(width: 1, color: scheme.outlineVariant),
@@ -392,7 +523,7 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.all(12),
-                  child: _buildTrailerArea(),
+                  child: _buildTrailerArea(context),
                 ),
               ),
               Padding(
