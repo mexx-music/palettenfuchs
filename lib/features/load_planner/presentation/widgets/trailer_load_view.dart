@@ -378,7 +378,7 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      constraints: const BoxConstraints(maxHeight: 300),
+      constraints: const BoxConstraints(maxHeight: 360),
       builder: (_) => StatefulBuilder(
         builder: (_, setSheetState) {
           // Re-derive group range on every sheet rebuild so buttons update
@@ -407,42 +407,66 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-                _actionTile(
-                  icon: Icons.arrow_back,
-                  label: AppStrings.get(widget.language, 'pallet_move_forward'),
-                  enabled: canMoveForward,
-                  onTap: () => _tryMoveGroup(
-                    ctx,
-                    forward: true,
-                    onSuccess: () => setSheetState(() {}),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                  child: Center(
+                    child: Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        _primaryActionButton(
+                          icon: Icons.arrow_upward,
+                          label: AppStrings.get(
+                            widget.language,
+                            'pallet_move_forward',
+                          ),
+                          enabled: canMoveForward,
+                          onTap: () => _tryMoveGroup(
+                            ctx,
+                            forward: true,
+                            onSuccess: () => setSheetState(() {}),
+                          ),
+                        ),
+                        _primaryActionButton(
+                          icon: Icons.refresh,
+                          label: AppStrings.get(
+                            widget.language,
+                            'pallet_rotate',
+                          ),
+                          enabled: canRotate,
+                          onTap: () =>
+                              _tryRotateSmart(ctx, () => setSheetState(() {})),
+                        ),
+                        _primaryActionButton(
+                          icon: Icons.arrow_downward,
+                          label: AppStrings.get(
+                            widget.language,
+                            'pallet_move_backward',
+                          ),
+                          enabled: canMoveBackward,
+                          onTap: () => _tryMoveGroup(
+                            ctx,
+                            forward: false,
+                            onSuccess: () => setSheetState(() {}),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                _actionTile(
-                  icon: Icons.arrow_forward,
-                  label: AppStrings.get(
-                    widget.language,
-                    'pallet_move_backward',
-                  ),
-                  enabled: canMoveBackward,
-                  onTap: () => _tryMoveGroup(
-                    ctx,
-                    forward: false,
-                    onSuccess: () => setSheetState(() {}),
-                  ),
+                const SizedBox(height: 12),
+                Divider(
+                  height: 1,
+                  indent: 24,
+                  endIndent: 24,
+                  color: Colors.grey[300],
                 ),
-                _actionTile(
-                  icon: Icons.rotate_right,
-                  label: AppStrings.get(widget.language, 'pallet_rotate'),
-                  enabled: canRotate,
-                  onTap: () => _tryRotateSmart(ctx, () => setSheetState(() {})),
-                ),
-                _actionTile(
-                  icon: Icons.clear,
+                _dangerActionButton(
                   label: AppStrings.get(
                     widget.language,
                     'pallet_clear_selection',
                   ),
-                  enabled: true,
                   onTap: () {
                     _pushUndoSnapshot();
                     setState(() {
@@ -452,7 +476,7 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
                     Navigator.of(ctx).pop();
                   },
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 10),
               ],
             ),
           );
@@ -461,23 +485,87 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
     );
   }
 
-  Widget _actionTile({
+  Widget _primaryActionButton({
     required IconData icon,
     required String label,
     required bool enabled,
     required VoidCallback onTap,
   }) {
-    final color = enabled ? null : Colors.grey;
-    return InkWell(
-      onTap: enabled ? onTap : null,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
-        child: Row(
-          children: [
-            Icon(icon, size: 20, color: color),
-            const SizedBox(width: 16),
-            Text(label, style: TextStyle(fontSize: 14, color: color)),
-          ],
+    final colorScheme = Theme.of(context).colorScheme;
+    final foreground = enabled ? colorScheme.primary : Colors.grey;
+
+    return SizedBox(
+      width: 112,
+      height: 96,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: enabled ? onTap : null,
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: enabled
+                  ? colorScheme.primary.withAlpha(120)
+                  : Colors.grey[300]!,
+            ),
+            color: enabled
+                ? colorScheme.primaryContainer.withAlpha(90)
+                : Colors.grey[100],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 26, color: foreground),
+                const SizedBox(height: 8),
+                Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    height: 1.2,
+                    fontWeight: FontWeight.w600,
+                    color: foreground,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _dangerActionButton({
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    final danger = Colors.red.shade700;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.delete_outline, size: 21, color: danger),
+              const SizedBox(width: 10),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: danger,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
