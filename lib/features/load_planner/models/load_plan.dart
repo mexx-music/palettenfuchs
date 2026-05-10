@@ -1,5 +1,6 @@
 import '../logic/trailer_constants.dart';
 import 'load_row.dart';
+import 'placed_pallet.dart';
 
 /// Ladeplan für einen Sattelzug
 class LoadPlan {
@@ -12,6 +13,10 @@ class LoadPlan {
   final bool hasManualSeedWarning;
   final String manualSeedWarningText;
 
+  /// Free-mode pallets accepted from the overlay editor.
+  /// When non-null, the trailer small view renders these instead of [rows].
+  final List<PlacedPallet>? manualPallets;
+
   const LoadPlan({
     required this.rows,
     this.requestedEuroPallets = 0,
@@ -21,6 +26,7 @@ class LoadPlan {
     this.trailerType = TrailerType.standard,
     this.hasManualSeedWarning = false,
     this.manualSeedWarningText = '',
+    this.manualPallets,
   });
 
   double get trailerMaxLengthCm => trailerType.trailerLengthCm;

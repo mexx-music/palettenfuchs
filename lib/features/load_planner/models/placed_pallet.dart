@@ -8,15 +8,30 @@ class PlacedPallet {
   final RowArrangement arrangement;
   final double weight;
 
+  /// Absolute position in free-editing mode (null = arrangement-derived geometry).
+  final double? xCm;
+  final double? yCm;
+  final double? widthCm;
+  final double? heightCm;
+
   const PlacedPallet({
     required this.id,
     required this.rowIndex,
     required this.palletIndexInRow,
     required this.arrangement,
     this.weight = 0.0,
+    this.xCm,
+    this.yCm,
+    this.widthCm,
+    this.heightCm,
   });
 
-  /// Geometrie: [x, y, width, height] in cm
+  /// True when absolute cm coordinates are set (free-editing mode).
+  bool get isFreeMode =>
+      xCm != null && yCm != null && widthCm != null && heightCm != null;
+
+  /// Geometrie: [x, y, width, height] in cm (x always 0, row-relative).
+  /// Only meaningful in arrangement mode (isFreeMode == false).
   List<double> get geometry {
     final pallets = _palletsFor(arrangement, 0);
     if (palletIndexInRow >= pallets.length) return [0, 0, 0, 0];
@@ -54,6 +69,10 @@ class PlacedPallet {
     int? palletIndexInRow,
     RowArrangement? arrangement,
     double? weight,
+    double? xCm,
+    double? yCm,
+    double? widthCm,
+    double? heightCm,
   }) {
     return PlacedPallet(
       id: id ?? this.id,
@@ -61,6 +80,10 @@ class PlacedPallet {
       palletIndexInRow: palletIndexInRow ?? this.palletIndexInRow,
       arrangement: arrangement ?? this.arrangement,
       weight: weight ?? this.weight,
+      xCm: xCm ?? this.xCm,
+      yCm: yCm ?? this.yCm,
+      widthCm: widthCm ?? this.widthCm,
+      heightCm: heightCm ?? this.heightCm,
     );
   }
 }

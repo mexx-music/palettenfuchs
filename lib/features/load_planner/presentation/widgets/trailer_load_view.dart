@@ -7,6 +7,7 @@ import 'package:palettenfuchs/localization/app_strings.dart';
 import '../../logic/manual_pallet_service.dart';
 import '../../models/load_plan.dart';
 import '../../models/placed_pallet.dart';
+import 'free_mode_painter.dart';
 import 'trailer_painter.dart';
 
 class TrailerLoadView extends StatefulWidget {
@@ -185,9 +186,9 @@ class _TrailerLoadViewState extends State<TrailerLoadView> {
 }
 
 // ---------------------------------------------------------------------------
-// Stateful overlay: tap = select/deselect (red border),
-//                   long-press on selection = action menu.
-// Layout mirrors TrailerLoadOverlay.
+// Free-mode overlay: tap = select/deselect, long-press = action menu.
+// Pallets are stored as a free List<PlacedPallet> with absolute cm coordinates.
+// The original LoadPlan is never modified here (sandbox mode).
 // ---------------------------------------------------------------------------
 class _SelectableTrailerOverlay extends StatefulWidget {
   final LoadPlan loadPlan;
@@ -205,17 +206,17 @@ class _SelectableTrailerOverlay extends StatefulWidget {
       _SelectableTrailerOverlayState();
 }
 
-class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
-  // Mutable local copy – updated when service actions rearrange rows.
-  late LoadPlan _loadPlan;
-  late List<PlacedPallet> _pallets;
+class _SelectableTrailerOverlayState
+    extends State<_SelectableTrailerOverlay> {
+  // Free-mode pallet list with absolute cm coordinates.
+  // Built once from widget.loadPlan on init; only modified by overlay actions.
+  late List<PlacedPallet> _freePallets;
 
-  // Non-final: replaced with a new Set on each change so TrailerPainter's
-  // shouldRepaint (which uses reference equality) correctly triggers.
+  // Non-final: replaced with a new Set on each change so FreeModePainter's
+  // shouldRepaint (reference equality) correctly triggers.
   Set<String> _selectedIds = {};
 
-  // Incremented on every selection change; drives the TweenAnimationBuilder key
-  // so the flash animation restarts on each tap.
+  // Incremented on every selection change; drives the TweenAnimationBuilder key.
   int _selectionVersion = 0;
 
   // Stores the palette hit in onTapDown; consumed by onTap or discarded by
@@ -225,113 +226,136 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
   @override
   void initState() {
     super.initState();
-    _loadPlan = widget.loadPlan;
-    _pallets = ManualPalletService.extractPlacedPallets(_loadPlan);
+    _freePallets = ManualPalletService.extractFreePallets(widget.loadPlan);
   }
 
-  // ---- helpers --------------------------------------------------------------
+  // ---- action helpers --------------------------------------------------------
 
-  int get _firstSelectedRowIndex {
-    if (_selectedIds.isEmpty) return -1;
-    return int.parse(_selectedIds.first.split('_').first);
+  void _tryRotateSmart(BuildContext ctx, VoidCallback onSuccess) {
+    if (_selectedIds.isEmpty) return;
+    final (updated, errorMsg) = ManualPalletService.rotateFreePalletSmart(
+      _freePallets,
+      _selectedIds,
+      widget.loadPlan.trailerType.trailerLengthCm,
+      widget.loadPlan.trailerType.trailerWidthCm,
+    );
+    if (errorMsg != null) {
+      ScaffoldMessenger.of(ctx)
+          .showSnackBar(SnackBar(content: Text(errorMsg)));
+      return;
+    }
+    setState(() {
+      _freePallets = updated;
+      _selectionVersion++;
+    });
+    onSuccess();
   }
 
-  void _refreshPallets() {
-    _pallets = ManualPalletService.extractPlacedPallets(_loadPlan);
+  void _tryMoveGroup(
+    BuildContext ctx, {
+    required bool forward,
+    required VoidCallback onSuccess,
+  }) {
+    if (_selectedIds.isEmpty) return;
+    final (updated, errorMsg) = ManualPalletService.moveFreePalletsGroup(
+      _freePallets,
+      _selectedIds,
+      forward: forward,
+      trailerLengthCm: widget.loadPlan.trailerType.trailerLengthCm,
+      trailerWidthCm: widget.loadPlan.trailerType.trailerWidthCm,
+    );
+    if (errorMsg != null) {
+      ScaffoldMessenger.of(ctx)
+          .showSnackBar(SnackBar(content: Text(errorMsg)));
+      return;
+    }
+    setState(() {
+      _freePallets = updated;
+      _selectionVersion++;
+    });
+    onSuccess();
   }
 
   // ---- action menu ----------------------------------------------------------
 
   void _showActionMenu(BuildContext ctx) {
     if (_selectedIds.isEmpty) return;
-    final rowIndex = _firstSelectedRowIndex;
-    if (rowIndex < 0 || rowIndex >= _loadPlan.rows.length) return;
-
-    final row = _loadPlan.rows[rowIndex];
-    final canMoveForward = rowIndex > 0;
-    final canMoveBackward = rowIndex < _loadPlan.rows.length - 1;
-    // toString check avoids importing pallet_type.dart.
-    final canRotate = row.arrangement.toString().contains('euro');
 
     showModalBottomSheet<void>(
       context: ctx,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      constraints: const BoxConstraints(maxHeight: 280),
-      builder: (_) => SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Drag handle
-            Container(
-              width: 36,
-              height: 4,
-              margin: const EdgeInsets.symmetric(vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
+      constraints: const BoxConstraints(maxHeight: 300),
+      builder: (_) => StatefulBuilder(
+        builder: (_, setSheetState) {
+          // Re-derive group range on every sheet rebuild so buttons update
+          // after each move.
+          final range = ManualPalletService.findSelectionRange(
+              _freePallets, _selectedIds);
+          final canMoveForward = range.groupStart > 0;
+          final canMoveBackward = range.groupEnd >= 0 &&
+              range.groupEnd < range.totalSlots - 1;
+          final canRotate = _selectedIds.isNotEmpty;
+
+          return SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Drag handle
+                Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                _actionTile(
+                  icon: Icons.arrow_back,
+                  label: AppStrings.get(
+                      widget.language, 'pallet_move_forward'),
+                  enabled: canMoveForward,
+                  onTap: () => _tryMoveGroup(ctx,
+                      forward: true,
+                      onSuccess: () => setSheetState(() {})),
+                ),
+                _actionTile(
+                  icon: Icons.arrow_forward,
+                  label: AppStrings.get(
+                      widget.language, 'pallet_move_backward'),
+                  enabled: canMoveBackward,
+                  onTap: () => _tryMoveGroup(ctx,
+                      forward: false,
+                      onSuccess: () => setSheetState(() {})),
+                ),
+                _actionTile(
+                  icon: Icons.rotate_right,
+                  label: AppStrings.get(widget.language, 'pallet_rotate'),
+                  enabled: canRotate,
+                  onTap: () =>
+                      _tryRotateSmart(ctx, () => setSheetState(() {})),
+                ),
+                _actionTile(
+                  icon: Icons.clear,
+                  label: AppStrings.get(
+                      widget.language, 'pallet_clear_selection'),
+                  enabled: true,
+                  onTap: () {
+                    setState(() {
+                      _selectedIds = {};
+                      _selectionVersion++;
+                    });
+                    Navigator.of(ctx).pop();
+                  },
+                ),
+                const SizedBox(height: 4),
+              ],
             ),
-            _actionTile(
-              icon: Icons.arrow_back,
-              label: AppStrings.get(widget.language, 'pallet_move_forward'),
-              enabled: canMoveForward,
-              onTap: () {
-                Navigator.of(ctx).pop();
-                setState(() {
-                  _loadPlan =
-                      ManualPalletService.moveRowForward(_loadPlan, rowIndex);
-                  _refreshPallets();
-                  _selectedIds = {};
-                });
-              },
-            ),
-            _actionTile(
-              icon: Icons.arrow_forward,
-              label: AppStrings.get(widget.language, 'pallet_move_backward'),
-              enabled: canMoveBackward,
-              onTap: () {
-                Navigator.of(ctx).pop();
-                setState(() {
-                  _loadPlan =
-                      ManualPalletService.moveRowBackward(_loadPlan, rowIndex);
-                  _refreshPallets();
-                  _selectedIds = {};
-                });
-              },
-            ),
-            _actionTile(
-              icon: Icons.rotate_right,
-              label: AppStrings.get(widget.language, 'pallet_rotate'),
-              enabled: canRotate,
-              onTap: () {
-                Navigator.of(ctx).pop();
-                final (success, errorMsg) =
-                    ManualPalletService.tryRotatePallet(_loadPlan, rowIndex);
-                if (!success) {
-                  ScaffoldMessenger.of(ctx).showSnackBar(
-                    SnackBar(
-                      content: Text(errorMsg ?? 'Rotation nicht möglich'),
-                    ),
-                  );
-                }
-              },
-            ),
-            _actionTile(
-              icon: Icons.clear,
-              label:
-                  AppStrings.get(widget.language, 'pallet_clear_selection'),
-              enabled: true,
-              onTap: () {
-                Navigator.of(ctx).pop();
-                setState(() => _selectedIds = {});
-              },
-            ),
-            const SizedBox(height: 4),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -360,30 +384,29 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
 
   // ---- trailer area ---------------------------------------------------------
 
-  // outerContext: the State's build context, used for showModalBottomSheet
-  // and ScaffoldMessenger – both require a context with a Navigator ancestor.
   Widget _buildTrailerArea(BuildContext outerContext) {
+    final trailerL = widget.loadPlan.trailerType.trailerLengthCm;
+    final trailerW = widget.loadPlan.trailerType.trailerWidthCm;
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = constraints.biggest;
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
-          // onTapDown records which palette was hit; onTap applies the
-          // toggle; onLongPress discards the pending hit and shows the menu.
           onTapDown: (details) {
-            _pendingPallet = ManualPalletService.findPalletAtPosition(
+            _pendingPallet = ManualPalletService.findFreePalletAtPosition(
               position: details.localPosition,
-              pallets: _pallets,
-              loadPlan: _loadPlan,
-              trailerWidth: size.width,
-              trailerHeight: size.height,
+              pallets: _freePallets,
+              trailerLengthCm: trailerL,
+              trailerWidthCm: trailerW,
+              screenWidth: size.width,
+              screenHeight: size.height,
             );
           },
           onTap: () {
             final pallet = _pendingPallet;
             _pendingPallet = null;
             if (pallet == null) return;
-            // Create a new Set so TrailerPainter.shouldRepaint fires correctly.
             final next = Set<String>.from(_selectedIds);
             if (next.contains(pallet.id)) {
               next.remove(pallet.id);
@@ -395,15 +418,11 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
               _selectionVersion++;
             });
           },
-          // Long-press shows the action menu only when ≥1 palette is marked.
           onLongPress: () {
             _pendingPallet = null;
             if (_selectedIds.isEmpty) return;
             _showActionMenu(outerContext);
           },
-          // TweenAnimationBuilder: brief opacity flash (0.5→1.0) on each
-          // selection change. ValueKey(_selectionVersion) restarts the
-          // animation on every tap so the feedback is always visible.
           child: TweenAnimationBuilder<double>(
             key: ValueKey(_selectionVersion),
             tween: Tween(begin: 0.5, end: 1.0),
@@ -412,8 +431,9 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
             builder: (_, opacity, child) =>
                 Opacity(opacity: opacity, child: child!),
             child: CustomPaint(
-              painter: TrailerPainter(
-                loadPlan: _loadPlan,
+              painter: FreeModePainter(
+                pallets: _freePallets,
+                loadPlan: widget.loadPlan,
                 emptyText: AppStrings.get(widget.language, 'enter_pallets'),
                 epalImage: widget.epalImage,
                 selectedPalletIds: _selectedIds,
@@ -436,8 +456,8 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
     final isPortrait = sh > sw;
     final scheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final trailerL = _loadPlan.trailerType.trailerLengthCm;
-    final trailerW = _loadPlan.trailerType.trailerWidthCm;
+    final trailerL = widget.loadPlan.trailerType.trailerLengthCm;
+    final trailerW = widget.loadPlan.trailerType.trailerWidthCm;
 
     if (isPortrait) {
       // Rotate entire panel 90° CW so the trailer appears in landscape.
@@ -458,7 +478,7 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
                 children: [
                   // Left strip → TOP in rotated view.
                   SizedBox(
-                    width: 48,
+                    width: 56,
                     child: Column(
                       children: [
                         const Spacer(),
@@ -472,6 +492,16 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
                           ),
                         ),
                         const Spacer(),
+                        // Übernehmen placeholder
+                        RotatedBox(
+                          quarterTurns: 3,
+                          child: IconButton(
+                            icon: const Icon(Icons.check, size: 20),
+                            visualDensity: VisualDensity.compact,
+                            tooltip: 'Übernehmen',
+                            onPressed: () => Navigator.of(context).pop(),
+                          ),
+                        ),
                         RotatedBox(
                           quarterTurns: 3,
                           child: IconButton(
@@ -485,7 +515,7 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
                     ),
                   ),
                   Container(width: 1, color: scheme.outlineVariant),
-                  // Centre: trailer graphic with selection + long-press menu.
+                  // Centre: trailer graphic with free-mode selection.
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.all(10),
@@ -544,6 +574,17 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
                         style: textTheme.titleSmall,
                       ),
                     ),
+                    // Übernehmen placeholder
+                    OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: OutlinedButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 4),
+                      ),
+                      child: const Text('Übernehmen'),
+                    ),
+                    const SizedBox(width: 4),
                     IconButton(
                       icon: const Icon(Icons.close, size: 20),
                       visualDensity: VisualDensity.compact,
