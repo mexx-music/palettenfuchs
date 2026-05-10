@@ -58,6 +58,8 @@ class AppStrings {
       'start_feature_axle_weight': 'Achslast berechnen',
       'start_feature_manual_mode': 'Manuellen Ladeplan vorbereiten',
       'start_button': 'App starten',
+      'trailer_enlarged': 'Ladeplan vergrößert',
+      'tap_to_enlarge': 'Zum Vergrößern antippen',
     },
 
     // -----------------------------------------------------------------------
@@ -105,6 +107,8 @@ class AppStrings {
       'start_feature_axle_weight': 'Calculate axle load',
       'start_feature_manual_mode': 'Prepare a manual load plan',
       'start_button': 'Start App',
+      'trailer_enlarged': 'Load plan enlarged',
+      'tap_to_enlarge': 'Tap to enlarge',
     },
 
     // -----------------------------------------------------------------------
@@ -154,6 +158,8 @@ class AppStrings {
       'start_feature_axle_weight': 'Израчунавање оптерећења осовине',
       'start_feature_manual_mode': 'Припрема ручног плана утовара',
       'start_button': 'Покрени апликацију',
+      'trailer_enlarged': 'Увећан план утовара',
+      'tap_to_enlarge': 'Додирните за увећање',
     },
   };
 }
