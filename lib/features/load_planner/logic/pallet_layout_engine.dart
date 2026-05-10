@@ -9,10 +9,7 @@ class PalletLayoutEngine {
   static const int maxEuroPallets = 34;
   static const int maxIndustryPallets = 26;
 
-  // Sattellast-Schwellwert für den Gewichts-Optimierer (kg)
-  static const double _frontWarningKg = 10800.0;
-
-  /// Berechnet einen Ladeplan basierend auf Euro- und Industrie-Paletten.
+/// Berechnet einen Ladeplan basierend auf Euro- und Industrie-Paletten.
   /// [kgPerEuro] > 0 aktiviert die gewichtsbasierte Achslast-Optimierung.
   static LoadPlan calculateBasicPlan({
     required int euroPallets,
@@ -32,16 +29,22 @@ class PalletLayoutEngine {
     // 1. Euro-Paletten verarbeiten
     if (optimizeAxleLoad && euroToPlace > 0) {
       if (kgPerEuro > 0) {
-        // Gewichtsbasierte Optimierung: bestes Muster nach Sattellast wählen
-        final best = _bestEuroPatternForWeight(
+        // Gewichtsbasierte Optimierung: beste Sequenz nach Sattellast wählen
+        final seq = _bestEuroSequenceForWeight(
           totalPallets: euroToPlace,
           kgPerEuro: kgPerEuro,
           trailerLengthCm: trailerLengthCm,
           startOffsetCm: 0,
         );
-        if (best != null) {
-          usedLength =
-              _buildEuroRows(rows, best.n3, best.n2, best.n1, usedLength);
+        if (seq != null) {
+          for (final arr in seq) {
+            rows.add(LoadRow(
+                index: rows.length,
+                arrangement: arr,
+                palletCount: arr.palletCount,
+                weight: 0));
+            usedLength += arr.lengthCm;
+          }
         } else {
           usedLength = _addEuroPallets(
               rows, euroToPlace, rows.length, usedLength, trailerLengthCm);
@@ -90,49 +93,123 @@ class PalletLayoutEngine {
   // Gewichtsbasierter Optimierer für Euro-Paletten
   // ---------------------------------------------------------------------------
 
-  /// Testet n1 ∈ {0, 1, 2} Einzelpaletten vorne und wählt das Muster mit der
-  /// niedrigsten Sattellast. Vorzugsweise unter [_frontWarningKg].
-  static ({int n3, int n2, int n1})? _bestEuroPatternForWeight({
+  /// Findet die beste Ladereihenfolge für Euro-Paletten.
+  /// Erzeugt Kandidaten-Sequenzen (mit 3er-Reihen zwischen Querreihen)
+  /// und wählt nach Sattellast-Score.
+  static List<RowArrangement>? _bestEuroSequenceForWeight({
     required int totalPallets,
     required int kgPerEuro,
     required double trailerLengthCm,
     required double startOffsetCm,
   }) {
-    ({int n3, int n2, int n1})? best;
-    double bestFront = double.infinity;
+    final maxN1 = _maxSinglesForWeight(kgPerEuro);
+    // Extremlast (≥ 950 kg): bis zu 3 Singles in Folge erlaubt.
+    final maxGroupSize = kgPerEuro >= 950 ? 3 : 2;
 
-    for (int n1 = 0; n1 <= 2; n1++) {
+    List<RowArrangement>? best;
+    double bestScore = double.infinity;
+
+    for (int n1 = 0; n1 <= maxN1; n1++) {
       final remaining = totalPallets - n1;
-      if (remaining < 0) continue;
+      if (remaining <= 0) continue;
 
-      final split = _splitEuro(remaining);
-      if (split == null) continue;
+      for (final split in _splitEuroVariants(remaining)) {
+        final rowLen = split.n3 * TrailerConstants.euroLengthCm +
+            (split.n2 + n1) * TrailerConstants.euroWidthCm;
+        if (startOffsetCm + rowLen > trailerLengthCm) continue;
 
-      final rowLen = split.n3 * TrailerConstants.euroLengthCm +
-          (split.n2 + n1) * TrailerConstants.euroWidthCm;
-      if (startOffsetCm + rowLen > trailerLengthCm) continue;
-
-      final frontLoad = _computeEuroFrontLoad(
-        n3: split.n3,
-        n2: split.n2,
-        n1: n1,
-        kgPerEuro: kgPerEuro,
-        trailerLengthCm: trailerLengthCm,
-        startOffsetCm: startOffsetCm,
-      );
-
-      // Besser wenn: bisher über Schwelle und dieser darunter ODER einfach kleiner
-      final isBetter = best == null ||
-          (bestFront >= _frontWarningKg && frontLoad < bestFront) ||
-          (frontLoad < _frontWarningKg && frontLoad < bestFront);
-
-      if (isBetter) {
-        best = (n3: split.n3, n2: split.n2, n1: n1);
-        bestFront = frontLoad;
+        for (final seq in _generateEuroSequences(
+            n1: n1, n2: split.n2, n3: split.n3,
+            maxGroupSize: maxGroupSize)) {
+          if (!_isValidHeavySequence(seq, kgPerEuro)) continue;
+          final score = _scoreEuroSequence(
+            seq: seq,
+            kgPerEuro: kgPerEuro,
+            trailerLengthCm: trailerLengthCm,
+            startOffsetCm: startOffsetCm,
+          );
+          if (score < bestScore) {
+            bestScore = score;
+            best = seq;
+          }
+        }
       }
     }
 
     return best;
+  }
+
+  /// Maximale Einzelreihen nach Gewichtskategorie.
+  /// ≥ 950 kg → 5 (extrem schwer, Last stark strecken)
+  /// ≥ 900 kg → 3
+  /// ≥ 700 kg → 2
+  /// sonst    → 1
+  static int _maxSinglesForWeight(int kgPerEuro) {
+    if (kgPerEuro >= 950) return 5;
+    if (kgPerEuro >= 900) return 3;
+    if (kgPerEuro >= 700) return 2;
+    return 1;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Debug-Hilfsmethode – formatiert Testfälle für die Konsole.
+  // ---------------------------------------------------------------------------
+
+  /// Berechnet einen Testfall und gibt einen formatierten Bericht zurück.
+  /// Nur zur Entwicklungszeit / Verifikation gedacht.
+  static String debugReport({
+    required int euroPallets,
+    required int kgPerEuro,
+    TrailerType trailerType = TrailerType.standard,
+  }) {
+    final plan = calculateBasicPlan(
+      euroPallets: euroPallets,
+      industryPallets: 0,
+      optimizeAxleLoad: true,
+      trailerType: trailerType,
+      kgPerEuro: kgPerEuro,
+    );
+
+    final seq = plan.rows;
+    int c1 = 0, c2 = 0, c3 = 0;
+    double rearLoad = 0;
+    double pos = 0;
+    final patternParts = <String>[];
+
+    for (final row in seq) {
+      rearLoad += row.palletCount *
+          kgPerEuro *
+          (pos + row.lengthCm / 2) /
+          trailerType.trailerLengthCm;
+      pos += row.lengthCm;
+      switch (row.arrangement) {
+        case RowArrangement.euroTransverseSingle:
+          c1++;
+          patternParts.add('1');
+        case RowArrangement.euroTransverse2:
+          c2++;
+          patternParts.add('2');
+        case RowArrangement.euroLongi3:
+          c3++;
+          patternParts.add('3');
+        default:
+          break;
+      }
+    }
+
+    final totalWeight = euroPallets * kgPerEuro.toDouble();
+    final frontLoad = (totalWeight - rearLoad).round();
+    final usedCm = plan.usedLengthCm.round();
+    final freeCm = plan.remainingLengthCm.round();
+    final pattern = patternParts.join(' · ');
+
+    return '=== $euroPallets Euro × $kgPerEuro kg'
+        ' [${trailerType.label}] ===\n'
+        'Muster:    $pattern\n'
+        'Counts:    1er=$c1  2er=$c2  3er=$c3'
+        '  (Σ=${c1 + c2 * 2 + c3 * 3} Pal.)\n'
+        'Länge:     $usedCm cm genutzt · $freeCm cm frei\n'
+        'Frontlast: ≈ $frontLoad kg\n';
   }
 
   /// Zerlegt [remaining] Paletten in n3 (3er-Reihen) und n2 (2er-Reihen).
@@ -148,82 +225,230 @@ class PalletLayoutEngine {
     return null;
   }
 
-  /// Hebelmodell für ein Euro-Muster: Anordnung [n1×1er vorne][n2×2er][n3×3er hinten].
-  static double _computeEuroFrontLoad({
-    required int n3,
-    required int n2,
+  /// Zerlegungsvarianten von [remaining] — greedy zuerst, dann genau eine Alternante.
+  /// Die Alternante ersetzt 2 Dreier durch 3 Zweier (6 Paletten konstant) und
+  /// schafft genügend 2er-Puffer für die Schwerlast-Transitregel — ohne 3er-Reihen
+  /// vollständig zu eliminieren.
+  static List<({int n3, int n2})> _splitEuroVariants(int remaining) {
+    final base = _splitEuro(remaining);
+    if (base == null) return [];
+    final variants = <({int n3, int n2})>[base];
+    if (base.n3 >= 2) {
+      variants.add((n3: base.n3 - 2, n2: base.n2 + 3));
+    }
+    return variants;
+  }
+
+  /// Schwerlast-Transitregel (kgPerEuro >= 900):
+  /// Nach einer Einzelreihe (1er) darf nie direkt eine 3er-Längsreihe folgen —
+  /// es muss zuerst eine 2er-Querreihe kommen.
+  /// Verletzende Kandidaten werden verworfen, nicht nur bestraft.
+  static bool _isValidHeavySequence(
+      List<RowArrangement> seq, int kgPerEuro) {
+    if (kgPerEuro < 900) return true;
+    for (int i = 0; i < seq.length - 1; i++) {
+      if (seq[i] == RowArrangement.euroTransverseSingle &&
+          seq[i + 1] == RowArrangement.euroLongi3) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /// Erzeugt diverse Kandidaten-Sequenzen für (n1, n2, n3).
+  ///
+  /// n1 Singles werden in Gruppen à 1–maxGroupSize zerlegt (→ _singleGroupings).
+  /// Jede Gruppe trennt zwei Pool-Segmente aus abwechselnden 2er-/3er-Reihen.
+  /// maxGroupSize=2 (normal), maxGroupSize=3 (Extremlast ≥ 950 kg).
+  /// Größere Gruppen werden zuerst enumeriert, damit Front-loading-Muster
+  /// auch bei 100-Kandidaten-Cap sicher enthalten sind.
+  static List<List<RowArrangement>> _generateEuroSequences({
     required int n1,
+    required int n2,
+    required int n3,
+    int maxGroupSize = 2,
+  }) {
+    const limit = 100;
+    final results = <List<RowArrangement>>[];
+
+    // Sortiertes Basismuster [1er…][2er…][3er…]: gültig wenn ≤ maxGroupSize Singles vorne.
+    if (n1 <= maxGroupSize) {
+      results.add([
+        for (int i = 0; i < n1; i++) RowArrangement.euroTransverseSingle,
+        for (int i = 0; i < n2; i++) RowArrangement.euroTransverse2,
+        for (int i = 0; i < n3; i++) RowArrangement.euroLongi3,
+      ]);
+    }
+
+    if (n1 == 0) {
+      results.add(_buildAlternatingPool(n2, n3, start2er: true));
+      if (n2 > 0 && n3 > 0) {
+        results.add(_buildAlternatingPool(n2, n3, start2er: false));
+      }
+      return results;
+    }
+
+    // Größere Gruppen zuerst → Dreifach-/Doppel-Single-Muster bevorzugt.
+    for (final grouping in _singleGroupings(n1, maxGroupSize: maxGroupSize)) {
+      if (results.length >= limit) break;
+      for (final start2er in [true, if (n2 > 0 && n3 > 0) false]) {
+        if (results.length >= limit) break;
+        final pool = _buildAlternatingPool(n2, n3, start2er: start2er);
+        _enumSegGrouped(
+          pool: pool,
+          grouping: grouping,
+          segIdx: 0,
+          sizes: [],
+          results: results,
+          limit: limit,
+        );
+      }
+    }
+
+    return results;
+  }
+
+  /// Alle Zerlegungen von [n1] in Gruppen à 1…maxGroupSize, größere zuerst.
+  /// Beispiel (max=2): 3 → [[2,1], [1,2], [1,1,1]]
+  /// Beispiel (max=3): 3 → [[3], [2,1], [1,2], [1,1,1]]
+  static List<List<int>> _singleGroupings(int n1, {int maxGroupSize = 2}) {
+    final result = <List<int>>[];
+    _enumGroupings(n1, [], result, maxGroupSize: maxGroupSize);
+    return result;
+  }
+
+  static void _enumGroupings(
+      int remaining, List<int> current, List<List<int>> result,
+      {int maxGroupSize = 2}) {
+    if (remaining == 0) {
+      result.add(List.of(current));
+      return;
+    }
+    for (int g = maxGroupSize; g >= 1; g--) {
+      if (remaining >= g) {
+        current.add(g);
+        _enumGroupings(remaining - g, current, result, maxGroupSize: maxGroupSize);
+        current.removeLast();
+      }
+    }
+  }
+
+  /// Abwechselnder Pool aus 2er- und 3er-Reihen.
+  static List<RowArrangement> _buildAlternatingPool(
+      int n2, int n3, {required bool start2er}) {
+    final pool = <RowArrangement>[];
+    int rem2 = n2, rem3 = n3;
+    bool use2er = start2er;
+    while (rem2 > 0 || rem3 > 0) {
+      if (use2er && rem2 > 0) {
+        pool.add(RowArrangement.euroTransverse2);
+        rem2--;
+      } else if (!use2er && rem3 > 0) {
+        pool.add(RowArrangement.euroLongi3);
+        rem3--;
+      } else if (rem2 > 0) {
+        pool.add(RowArrangement.euroTransverse2);
+        rem2--;
+      } else {
+        pool.add(RowArrangement.euroLongi3);
+        rem3--;
+      }
+      use2er = !use2er;
+    }
+    return pool;
+  }
+
+  /// Rekursive Segmentverteilung mit Gruppen-Trennern.
+  /// Pool wird in (grouping.length + 1) Segmente aufgeteilt;
+  /// zwischen Segment i und i+1 stehen grouping[i] Singles (1 oder 2).
+  /// Regeln: erstes Segment ≥ 0, mittlere/letztes Segment ≥ 1 Reihe.
+  static void _enumSegGrouped({
+    required List<RowArrangement> pool,
+    required List<int> grouping,
+    required int segIdx,
+    required List<int> sizes,
+    required List<List<RowArrangement>> results,
+    required int limit,
+  }) {
+    if (results.length >= limit) return;
+
+    final totalSegs = grouping.length + 1;
+    final used = sizes.fold(0, (a, b) => a + b);
+    final remaining = pool.length - used;
+    final segsLeft = totalSegs - segIdx;
+
+    if (segsLeft == 1) {
+      if (remaining <= 0) return; // Letztes Segment muss ≥ 1 Reihe haben.
+      final seq = <RowArrangement>[];
+      int idx = 0;
+      for (int i = 0; i < totalSegs; i++) {
+        final count = i < sizes.length ? sizes[i] : remaining;
+        for (int j = 0; j < count; j++) {
+          seq.add(pool[idx++]);
+        }
+        if (i < grouping.length) {
+          for (int k = 0; k < grouping[i]; k++) {
+            seq.add(RowArrangement.euroTransverseSingle);
+          }
+        }
+      }
+      results.add(seq);
+      return;
+    }
+
+    final minSize = segIdx == 0 ? 0 : 1;
+    final maxSize = remaining - (segsLeft - 1);
+
+    for (int size = minSize; size <= maxSize; size++) {
+      sizes.add(size);
+      _enumSegGrouped(
+        pool: pool,
+        grouping: grouping,
+        segIdx: segIdx + 1,
+        sizes: sizes,
+        results: results,
+        limit: limit,
+      );
+      sizes.removeLast();
+      if (results.length >= limit) return;
+    }
+  }
+
+  /// Bewertet eine Sequenz (kleiner = besser).
+  /// Primär: Sattellast (Hebelmodell).
+  /// Sekundär: wenige Einzelreihen (+1 pro 1er).
+  /// Tertiär:  2er-/3er-Wechsel maximieren (−0.5 pro Wechselpaar).
+  static double _scoreEuroSequence({
+    required List<RowArrangement> seq,
     required int kgPerEuro,
     required double trailerLengthCm,
     required double startOffsetCm,
   }) {
     double rearLoad = 0;
     double pos = startOffsetCm;
+    int mixCount = 0;
+    int n1 = 0;
+    RowArrangement? prev;
 
-    for (int i = 0; i < n1; i++) {
-      rearLoad += kgPerEuro *
-          (pos + TrailerConstants.euroWidthCm / 2) /
-          trailerLengthCm;
-      pos += TrailerConstants.euroWidthCm;
-    }
-    for (int i = 0; i < n2; i++) {
-      rearLoad += 2 *
+    for (final arr in seq) {
+      rearLoad += arr.palletCount *
           kgPerEuro *
-          (pos + TrailerConstants.euroWidthCm / 2) /
+          (pos + arr.lengthCm / 2) /
           trailerLengthCm;
-      pos += TrailerConstants.euroWidthCm;
-    }
-    for (int i = 0; i < n3; i++) {
-      rearLoad += 3 *
-          kgPerEuro *
-          (pos + TrailerConstants.euroLengthCm / 2) /
-          trailerLengthCm;
-      pos += TrailerConstants.euroLengthCm;
-    }
-
-    final totalWeight = (n3 * 3 + n2 * 2 + n1) * kgPerEuro.toDouble();
-    return totalWeight - rearLoad;
-  }
-
-  /// Fügt Euro-Reihen nach Muster [n1×1er][n2×2er][n3×3er] in [rows] ein.
-  static double _buildEuroRows(
-    List<LoadRow> rows,
-    int n3,
-    int n2,
-    int n1,
-    double startUsedLength,
-  ) {
-    double usedLength = startUsedLength;
-
-    for (int i = 0; i < n1; i++) {
-      rows.add(LoadRow(
-        index: rows.length,
-        arrangement: RowArrangement.euroTransverseSingle,
-        palletCount: 1,
-        weight: 0,
-      ));
-      usedLength += TrailerConstants.euroWidthCm;
-    }
-    for (int i = 0; i < n2; i++) {
-      rows.add(LoadRow(
-        index: rows.length,
-        arrangement: RowArrangement.euroTransverse2,
-        palletCount: 2,
-        weight: 0,
-      ));
-      usedLength += TrailerConstants.euroWidthCm;
-    }
-    for (int i = 0; i < n3; i++) {
-      rows.add(LoadRow(
-        index: rows.length,
-        arrangement: RowArrangement.euroLongi3,
-        palletCount: 3,
-        weight: 0,
-      ));
-      usedLength += TrailerConstants.euroLengthCm;
+      pos += arr.lengthCm;
+      if (arr == RowArrangement.euroTransverseSingle) {
+        n1++;
+      } else if (prev != null &&
+          prev != RowArrangement.euroTransverseSingle &&
+          prev != arr) {
+        mixCount++;
+      }
+      prev = arr;
     }
 
-    return usedLength;
+    final totalWeight =
+        seq.fold(0, (s, r) => s + r.palletCount) * kgPerEuro.toDouble();
+    return totalWeight - rearLoad + n1 * 1.0 - mixCount * 0.5;
   }
 
   // ---------------------------------------------------------------------------
@@ -490,15 +715,21 @@ class PalletLayoutEngine {
     // Phase 2: Verbleibende Euro-Paletten auffüllen
     if (remainingEuro > 0) {
       if (optimizeAxleLoad && kgPerEuro > 0) {
-        final best = _bestEuroPatternForWeight(
+        final seq = _bestEuroSequenceForWeight(
           totalPallets: remainingEuro,
           kgPerEuro: kgPerEuro,
           trailerLengthCm: trailerLengthCm,
           startOffsetCm: usedLength,
         );
-        if (best != null) {
-          usedLength =
-              _buildEuroRows(rows, best.n3, best.n2, best.n1, usedLength);
+        if (seq != null) {
+          for (final arr in seq) {
+            rows.add(LoadRow(
+                index: rows.length,
+                arrangement: arr,
+                palletCount: arr.palletCount,
+                weight: 0));
+            usedLength += arr.lengthCm;
+          }
         } else {
           usedLength = _addEuroPallets(
               rows, remainingEuro, rows.length, usedLength, trailerLengthCm);
