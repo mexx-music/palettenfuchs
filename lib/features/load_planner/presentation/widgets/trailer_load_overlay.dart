@@ -26,7 +26,7 @@ class TrailerLoadOverlay extends StatelessWidget {
   }) {
     showDialog<void>(
       context: context,
-      barrierColor: Colors.black54,
+      barrierColor: Colors.black87,
       builder: (_) => TrailerLoadOverlay(
         loadPlan: loadPlan,
         language: language,
@@ -37,88 +37,112 @@ class TrailerLoadOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final sw = media.size.width;
+    final sh = media.size.height;
+    final isPortrait = sh > sw;
+
+    if (isPortrait) {
+      // On a portrait phone: rotate the entire panel 90° clockwise so the
+      // trailer appears in landscape – long axis across the full screen width.
+      // The panel is sized for landscape (width = sh, height = sw) and
+      // RotatedBox maps it back onto the portrait screen.
+      return Dialog(
+        insetPadding: EdgeInsets.zero,
+        backgroundColor: Colors.transparent,
+        child: RotatedBox(
+          quarterTurns: 1,
+          child: SizedBox(
+            width: sh,
+            height: sw,
+            child: _buildPanel(context),
+          ),
+        ),
+      );
+    }
+
+    // Desktop / tablet already in landscape: centred, constrained dialog.
+    final panelW = (sw - 48).clamp(300.0, 1100.0);
+    final panelH = (sh - 80).clamp(300.0, 620.0);
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+      backgroundColor: Colors.transparent,
+      child: SizedBox(
+        width: panelW,
+        height: panelH,
+        child: _buildPanel(context),
+      ),
+    );
+  }
+
+  /// Content panel shared by both orientations.
+  /// Parent always provides a fixed height, so [Expanded] works for the graphic.
+  Widget _buildPanel(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final trailerL = loadPlan.trailerType.trailerLengthCm;
     final trailerW = loadPlan.trailerType.trailerWidthCm;
-    final trailerRatio = trailerL / trailerW; // typically ~5.67
 
-    return Dialog(
-      // Minimal side margins so the graphic can be as wide as possible.
-      insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 32),
+    return Material(
+      color: scheme.surface,
+      borderRadius: BorderRadius.circular(12),
       clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ConstrainedBox(
-        // Cap width on desktop/web at 1100 px.
-        constraints: const BoxConstraints(maxWidth: 1100),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // ── Header ──────────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 4, 4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      AppStrings.get(language, 'trailer_enlarged'),
-                      style: textTheme.titleMedium,
-                    ),
+      elevation: 6,
+      child: Column(
+        // mainAxisSize defaults to max → fills the fixed-height SizedBox.
+        children: [
+          // ── Header ────────────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 4, 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    AppStrings.get(language, 'trailer_enlarged'),
+                    style: textTheme.titleMedium,
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    tooltip: 'Schließen',
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
-              ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  tooltip: 'Schließen',
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
             ),
+          ),
 
-            Divider(height: 1, color: scheme.outlineVariant),
+          Divider(height: 1, color: scheme.outlineVariant),
 
-            // ── Trailer graphic ─────────────────────────────────────────
-            Padding(
+          // ── Trailer graphic – fills all remaining height ─────────────
+          Expanded(
+            child: Padding(
               padding: const EdgeInsets.all(12),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final availableWidth = constraints.maxWidth;
-                  // Ideal height for a perfectly proportional trailer view.
-                  final ideal = availableWidth / trailerRatio;
-                  // Clamp: never below 180 px (readable on phone),
-                  //         never above 480 px (sensible on large screens).
-                  final height = ideal.clamp(180.0, 480.0);
-
-                  return SizedBox(
-                    width: availableWidth,
-                    height: height,
-                    child: CustomPaint(
-                      painter: TrailerPainter(
-                        loadPlan: loadPlan,
-                        emptyText:
-                            AppStrings.get(language, 'enter_pallets'),
-                        epalImage: epalImage,
-                      ),
-                      child: const SizedBox.expand(),
-                    ),
-                  );
-                },
+              child: CustomPaint(
+                painter: TrailerPainter(
+                  loadPlan: loadPlan,
+                  emptyText: AppStrings.get(language, 'enter_pallets'),
+                  epalImage: epalImage,
+                ),
+                child: const SizedBox.expand(),
               ),
             ),
+          ),
 
-            // ── Dimensions footer ────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+          // ── Footer ────────────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Align(
+              alignment: Alignment.centerLeft,
               child: Text(
-                'Innenmaße: ${trailerW.toStringAsFixed(0)} cm × '
-                '${trailerL.toStringAsFixed(0)} cm',
+                'Innenmaße: ${trailerW.toStringAsFixed(0)} cm'
+                ' × ${trailerL.toStringAsFixed(0)} cm',
                 style: textTheme.bodySmall?.copyWith(
                   color: scheme.onSurface.withAlpha(153),
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

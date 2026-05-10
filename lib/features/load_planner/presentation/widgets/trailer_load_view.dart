@@ -106,11 +106,14 @@ class _TrailerLoadViewState extends State<TrailerLoadView> {
                     size: 14,
                     color: scheme.onSurface.withAlpha(120)),
                 const SizedBox(width: 3),
-                Text(
-                  AppStrings.get(widget.language, 'tap_to_enlarge'),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurface.withAlpha(120),
-                      ),
+                Flexible(
+                  child: Text(
+                    AppStrings.get(widget.language, 'tap_to_enlarge'),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurface.withAlpha(120),
+                        ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ],
             ),
