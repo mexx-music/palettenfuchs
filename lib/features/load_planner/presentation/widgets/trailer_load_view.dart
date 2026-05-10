@@ -102,13 +102,17 @@ class _TrailerLoadViewState extends State<TrailerLoadView> {
                           pallets: widget.loadPlan.manualPallets!,
                           loadPlan: widget.loadPlan,
                           emptyText: AppStrings.get(
-                              widget.language, 'enter_pallets'),
+                            widget.language,
+                            'enter_pallets',
+                          ),
                           epalImage: _epalImage,
                         )
                       : TrailerPainter(
                           loadPlan: widget.loadPlan,
                           emptyText: AppStrings.get(
-                              widget.language, 'enter_pallets'),
+                            widget.language,
+                            'enter_pallets',
+                          ),
                           epalImage: _epalImage,
                         ),
                   child: const SizedBox.expand(),
@@ -127,15 +131,18 @@ class _TrailerLoadViewState extends State<TrailerLoadView> {
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ),
-                Icon(Icons.zoom_in,
-                    size: 14, color: scheme.onSurface.withAlpha(120)),
+                Icon(
+                  Icons.zoom_in,
+                  size: 14,
+                  color: scheme.onSurface.withAlpha(120),
+                ),
                 const SizedBox(width: 3),
                 Flexible(
                   child: Text(
                     AppStrings.get(widget.language, 'tap_to_enlarge'),
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurface.withAlpha(120),
-                        ),
+                      color: scheme.onSurface.withAlpha(120),
+                    ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -185,18 +192,15 @@ class _TrailerLoadViewState extends State<TrailerLoadView> {
           Container(
             width: 8.0,
             height: 8.0,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
           const SizedBox(width: 4.0),
           Text(
             label,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: Colors.black87,
-                  fontSize: 11.0,
-                ),
+              color: Colors.black87,
+              fontSize: 11.0,
+            ),
           ),
         ],
       ),
@@ -227,8 +231,17 @@ class _SelectableTrailerOverlay extends StatefulWidget {
       _SelectableTrailerOverlayState();
 }
 
-class _SelectableTrailerOverlayState
-    extends State<_SelectableTrailerOverlay> {
+class _OverlayUndoSnapshot {
+  final List<PlacedPallet> freePallets;
+  final Set<String> selectedIds;
+
+  const _OverlayUndoSnapshot({
+    required this.freePallets,
+    required this.selectedIds,
+  });
+}
+
+class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
   // Free-mode pallet list with absolute cm coordinates.
   // Built once from widget.loadPlan on init; only modified by overlay actions.
   late List<PlacedPallet> _freePallets;
@@ -242,6 +255,8 @@ class _SelectableTrailerOverlayState
 
   // Incremented on every selection change; drives the TweenAnimationBuilder key.
   int _selectionVersion = 0;
+
+  final List<_OverlayUndoSnapshot> _undoHistory = [];
 
   // Stores the palette hit in onTapDown; consumed by onTap or discarded by
   // onLongPress so the two gesture paths stay independent.
@@ -257,6 +272,25 @@ class _SelectableTrailerOverlayState
     _originalPalletCount = _freePallets.length;
   }
 
+  void _pushUndoSnapshot() {
+    _undoHistory.add(
+      _OverlayUndoSnapshot(
+        freePallets: List<PlacedPallet>.from(_freePallets),
+        selectedIds: Set<String>.from(_selectedIds),
+      ),
+    );
+  }
+
+  void _undoLastChange() {
+    if (_undoHistory.isEmpty) return;
+    final previous = _undoHistory.removeLast();
+    setState(() {
+      _freePallets = previous.freePallets;
+      _selectedIds = previous.selectedIds;
+      _selectionVersion++;
+    });
+  }
+
   // ---- Übernehmen -----------------------------------------------------------
 
   void _onAccept(BuildContext ctx) {
@@ -267,17 +301,23 @@ class _SelectableTrailerOverlayState
       widget.loadPlan.trailerType.trailerWidthCm,
     );
     if (!valid) {
-      ScaffoldMessenger.of(ctx).showSnackBar(
-          SnackBar(content: Text(errorMsg ?? 'Ungültiger Plan.')));
+      ScaffoldMessenger.of(
+        ctx,
+      ).showSnackBar(SnackBar(content: Text(errorMsg ?? 'Ungültiger Plan.')));
       return;
     }
     // Safety: count must not have changed.
     if (_freePallets.length != _originalPalletCount) {
-      ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
-          content: Text('Palettenanzahl darf nicht verändert werden.')));
+      ScaffoldMessenger.of(ctx).showSnackBar(
+        const SnackBar(
+          content: Text('Palettenanzahl darf nicht verändert werden.'),
+        ),
+      );
       return;
     }
-    widget.onManualPalletsAccepted?.call(List<PlacedPallet>.unmodifiable(_freePallets));
+    widget.onManualPalletsAccepted?.call(
+      List<PlacedPallet>.unmodifiable(_freePallets),
+    );
     Navigator.of(ctx).pop();
   }
 
@@ -292,10 +332,10 @@ class _SelectableTrailerOverlayState
       widget.loadPlan.trailerType.trailerWidthCm,
     );
     if (errorMsg != null) {
-      ScaffoldMessenger.of(ctx)
-          .showSnackBar(SnackBar(content: Text(errorMsg)));
+      ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(errorMsg)));
       return;
     }
+    _pushUndoSnapshot();
     setState(() {
       _freePallets = updated;
       _selectionVersion++;
@@ -317,10 +357,10 @@ class _SelectableTrailerOverlayState
       trailerWidthCm: widget.loadPlan.trailerType.trailerWidthCm,
     );
     if (errorMsg != null) {
-      ScaffoldMessenger.of(ctx)
-          .showSnackBar(SnackBar(content: Text(errorMsg)));
+      ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(errorMsg)));
       return;
     }
+    _pushUndoSnapshot();
     setState(() {
       _freePallets = updated;
       _selectionVersion++;
@@ -344,10 +384,12 @@ class _SelectableTrailerOverlayState
           // Re-derive group range on every sheet rebuild so buttons update
           // after each move.
           final range = ManualPalletService.findSelectionRange(
-              _freePallets, _selectedIds);
+            _freePallets,
+            _selectedIds,
+          );
           final canMoveForward = range.groupStart > 0;
-          final canMoveBackward = range.groupEnd >= 0 &&
-              range.groupEnd < range.totalSlots - 1;
+          final canMoveBackward =
+              range.groupEnd >= 0 && range.groupEnd < range.totalSlots - 1;
           final canRotate = _selectedIds.isNotEmpty;
 
           return SafeArea(
@@ -367,35 +409,42 @@ class _SelectableTrailerOverlayState
                 ),
                 _actionTile(
                   icon: Icons.arrow_back,
-                  label: AppStrings.get(
-                      widget.language, 'pallet_move_forward'),
+                  label: AppStrings.get(widget.language, 'pallet_move_forward'),
                   enabled: canMoveForward,
-                  onTap: () => _tryMoveGroup(ctx,
-                      forward: true,
-                      onSuccess: () => setSheetState(() {})),
+                  onTap: () => _tryMoveGroup(
+                    ctx,
+                    forward: true,
+                    onSuccess: () => setSheetState(() {}),
+                  ),
                 ),
                 _actionTile(
                   icon: Icons.arrow_forward,
                   label: AppStrings.get(
-                      widget.language, 'pallet_move_backward'),
+                    widget.language,
+                    'pallet_move_backward',
+                  ),
                   enabled: canMoveBackward,
-                  onTap: () => _tryMoveGroup(ctx,
-                      forward: false,
-                      onSuccess: () => setSheetState(() {})),
+                  onTap: () => _tryMoveGroup(
+                    ctx,
+                    forward: false,
+                    onSuccess: () => setSheetState(() {}),
+                  ),
                 ),
                 _actionTile(
                   icon: Icons.rotate_right,
                   label: AppStrings.get(widget.language, 'pallet_rotate'),
                   enabled: canRotate,
-                  onTap: () =>
-                      _tryRotateSmart(ctx, () => setSheetState(() {})),
+                  onTap: () => _tryRotateSmart(ctx, () => setSheetState(() {})),
                 ),
                 _actionTile(
                   icon: Icons.clear,
                   label: AppStrings.get(
-                      widget.language, 'pallet_clear_selection'),
+                    widget.language,
+                    'pallet_clear_selection',
+                  ),
                   enabled: true,
                   onTap: () {
+                    _pushUndoSnapshot();
                     setState(() {
                       _selectedIds = {};
                       _selectionVersion++;
@@ -537,13 +586,23 @@ class _SelectableTrailerOverlayState
                         RotatedBox(
                           quarterTurns: 3,
                           child: Text(
-                            AppStrings.get(
-                                widget.language, 'trailer_enlarged'),
+                            AppStrings.get(widget.language, 'trailer_enlarged'),
                             style: textTheme.titleSmall,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         const Spacer(),
+                        RotatedBox(
+                          quarterTurns: 3,
+                          child: IconButton(
+                            icon: const Icon(Icons.undo, size: 20),
+                            visualDensity: VisualDensity.compact,
+                            tooltip: AppStrings.get(widget.language, 'undo'),
+                            onPressed: _undoHistory.isEmpty
+                                ? null
+                                : _undoLastChange,
+                          ),
+                        ),
                         RotatedBox(
                           quarterTurns: 3,
                           child: IconButton(
@@ -625,12 +684,27 @@ class _SelectableTrailerOverlayState
                         style: textTheme.titleSmall,
                       ),
                     ),
+                    OutlinedButton.icon(
+                      onPressed: _undoHistory.isEmpty ? null : _undoLastChange,
+                      style: OutlinedButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 4,
+                        ),
+                      ),
+                      icon: const Icon(Icons.undo, size: 18),
+                      label: Text(AppStrings.get(widget.language, 'undo')),
+                    ),
+                    const SizedBox(width: 4),
                     OutlinedButton(
                       onPressed: () => _onAccept(context),
                       style: OutlinedButton.styleFrom(
                         visualDensity: VisualDensity.compact,
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 4),
+                          horizontal: 12,
+                          vertical: 4,
+                        ),
                       ),
                       child: const Text('Übernehmen'),
                     ),

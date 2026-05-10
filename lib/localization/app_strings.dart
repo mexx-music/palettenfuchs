@@ -33,8 +33,7 @@ class AppStrings {
       'load_status': 'Ladung Status',
       'weights': 'Gewichte',
       'axle_estimate': 'Achslast-Schätzung (Hebelmodell)',
-      'axle_note':
-          'Grobe Fahrerhilfe – kein rechtssicherer Wiegenachweis.',
+      'axle_note': 'Grobe Fahrerhilfe – kein rechtssicherer Wiegenachweis.',
       'total_pallets': 'Gesamtpaletten',
       'used_length': 'Genutzte Länge',
       'free_length': 'Freie Länge',
@@ -49,11 +48,9 @@ class AppStrings {
       'axle_critical':
           'Sattellast wahrscheinlich zu hoch – Ladung weiter nach hinten verteilen oder Gewicht prüfen.',
       'axle_warning': 'Achtung: Sattellast nähert sich dem Grenzbereich.',
-      'overload_warning':
-          'Ladefläche überschritten – bitte Anzahl reduzieren.',
+      'overload_warning': 'Ladefläche überschritten – bitte Anzahl reduzieren.',
       'start_title': 'Pal Fuchs',
-      'start_subtitle':
-          'Dein Ladeplan-Assistent für Sattelzüge',
+      'start_subtitle': 'Dein Ladeplan-Assistent für Sattelzüge',
       'start_feature_load_plan': 'Ladefläche optimal planen',
       'start_feature_axle_weight': 'Achslast berechnen',
       'start_feature_manual_mode': 'Manuellen Ladeplan vorbereiten',
@@ -67,6 +64,7 @@ class AppStrings {
       'pallet_move_backward': 'Hinten verschieben',
       'pallet_rotate': 'Drehen',
       'pallet_clear_selection': 'Auswahl löschen',
+      'undo': 'Rückgängig',
     },
 
     // -----------------------------------------------------------------------
@@ -97,8 +95,7 @@ class AppStrings {
       'used_length': 'Used length',
       'free_length': 'Free length',
       'manual_plan': 'Manual Load Plan',
-      'manual_plan_hint':
-          'Drag-and-drop coming soon. Engine preparation only.',
+      'manual_plan_hint': 'Drag-and-drop coming soon. Engine preparation only.',
       'enter_pallets': 'Enter pallet count above',
       'capacity_used': 'capacity used',
       'unplaced_warning': 'Not all pallets fit on the loading area.',
@@ -123,6 +120,7 @@ class AppStrings {
       'pallet_move_backward': 'Move backward',
       'pallet_rotate': 'Rotate',
       'pallet_clear_selection': 'Clear selection',
+      'undo': 'Undo',
     },
 
     // -----------------------------------------------------------------------
@@ -163,8 +161,7 @@ class AppStrings {
       'unplaced_industry': 'Неpostављене индустријске палете',
       'axle_critical':
           'Оптерећење седлишта је вероватно превисоко – преместите терет или проверите тежину.',
-      'axle_warning':
-          'Пажња: Оптерећење седлишта се приближава граници.',
+      'axle_warning': 'Пажња: Оптерећење седлишта се приближава граници.',
       'overload_warning': 'Превазиђен простор за утовар – смањите број палета.',
       'start_title': 'Pal Fuchs',
       'start_subtitle': 'Ваш асистент за планирање утовара',
