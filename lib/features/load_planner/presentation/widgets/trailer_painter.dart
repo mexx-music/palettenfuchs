@@ -9,11 +9,13 @@ class TrailerPainter extends CustomPainter {
   final LoadPlan loadPlan;
   final String emptyText;
   final ui.Image? epalImage;
+  final Set<String> selectedPalletIds;
 
   const TrailerPainter({
     required this.loadPlan,
     this.emptyText = '',
     this.epalImage,
+    this.selectedPalletIds = const {},
   });
 
   static const double _padding = 20.0;
@@ -51,9 +53,18 @@ class TrailerPainter extends CustomPainter {
     canvas.clipRect(trailerRect);
 
     double xCm = 0;
-    for (final row in loadPlan.rows) {
-      _drawRow(canvas, row, xCm, trailerRect.left, trailerRect.top, scaleX,
-          scaleY);
+    for (int rowIdx = 0; rowIdx < loadPlan.rows.length; rowIdx++) {
+      final row = loadPlan.rows[rowIdx];
+      _drawRow(
+        canvas,
+        row,
+        rowIdx,
+        xCm,
+        trailerRect.left,
+        trailerRect.top,
+        scaleX,
+        scaleY,
+      );
       xCm += row.lengthCm;
     }
 
@@ -83,6 +94,7 @@ class TrailerPainter extends CustomPainter {
   void _drawRow(
     Canvas canvas,
     LoadRow row,
+    int rowIdx,
     double xCm,
     double trailerLeft,
     double trailerTop,
@@ -94,6 +106,7 @@ class TrailerPainter extends CustomPainter {
         row.arrangement == RowArrangement.euroTransverse2 ||
         row.arrangement == RowArrangement.euroTransverseSingle;
 
+    int palletIdx = 0;
     for (final p in _palletsFor(row.arrangement, xCm)) {
       final rect = Rect.fromLTWH(
         trailerLeft + p[0] * scaleX,
@@ -101,6 +114,9 @@ class TrailerPainter extends CustomPainter {
         p[2] * scaleX,
         p[3] * scaleY,
       );
+
+      final palletId = '${rowIdx}_$palletIdx';
+      final isSelected = selectedPalletIds.contains(palletId);
 
       canvas.drawRect(rect,
           Paint()
@@ -113,7 +129,19 @@ class TrailerPainter extends CustomPainter {
             ..style = PaintingStyle.stroke
             ..strokeWidth = 1.0);
 
+      // Highlight für ausgewählte Palette
+      if (isSelected) {
+        canvas.drawRect(
+          rect,
+          Paint()
+            ..color = Colors.red
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 3.0,
+        );
+      }
+
       if (isEuro) _drawEpalStamp(canvas, rect);
+      palletIdx++;
     }
   }
 
@@ -261,5 +289,6 @@ class TrailerPainter extends CustomPainter {
   bool shouldRepaint(TrailerPainter oldDelegate) =>
       loadPlan != oldDelegate.loadPlan ||
       emptyText != oldDelegate.emptyText ||
-      epalImage != oldDelegate.epalImage;
+      epalImage != oldDelegate.epalImage ||
+      selectedPalletIds != oldDelegate.selectedPalletIds;
 }

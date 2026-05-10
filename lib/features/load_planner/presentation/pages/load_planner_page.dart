@@ -30,13 +30,14 @@ class _LoadPlannerPageState extends State<LoadPlannerPage> {
   int _kgPerEuro = 0;
   int _kgPerIndustry = 0;
   TrailerType _trailerType = TrailerType.standard;
-  ManualLoadSeed _manualSeed = ManualLoadSeed.empty;
+  late ManualLoadSeed _manualSeed;
   late LoadPlan _currentPlan;
 
   @override
   void initState() {
     super.initState();
     _currentPlan = LoadPlan.empty;
+    _manualSeed = ManualLoadSeed.empty();
   }
 
   void _updatePlan() {

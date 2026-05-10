@@ -63,6 +63,10 @@ class AppStrings {
       'legend_euro_transverse': 'Euro quer',
       'legend_euro_long': 'Euro längs',
       'legend_industry': 'Industriepalette',
+      'pallet_move_forward': 'Vorne verschieben',
+      'pallet_move_backward': 'Hinten verschieben',
+      'pallet_rotate': 'Drehen',
+      'pallet_clear_selection': 'Auswahl löschen',
     },
 
     // -----------------------------------------------------------------------
@@ -115,6 +119,10 @@ class AppStrings {
       'legend_euro_transverse': 'Euro transverse',
       'legend_euro_long': 'Euro longitudinal',
       'legend_industry': 'Industrial pallet',
+      'pallet_move_forward': 'Move forward',
+      'pallet_move_backward': 'Move backward',
+      'pallet_rotate': 'Rotate',
+      'pallet_clear_selection': 'Clear selection',
     },
 
     // -----------------------------------------------------------------------
@@ -169,6 +177,10 @@ class AppStrings {
       'legend_euro_transverse': 'Еуро попречно',
       'legend_euro_long': 'Еуро уздужно',
       'legend_industry': 'Индустријска палета',
+      'pallet_move_forward': 'Помери уназад',
+      'pallet_move_backward': 'Помери унапред',
+      'pallet_rotate': 'Ротирај',
+      'pallet_clear_selection': 'Обриши избор',
     },
   };
 }
