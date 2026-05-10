@@ -209,7 +209,14 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
   // Mutable local copy – updated when service actions rearrange rows.
   late LoadPlan _loadPlan;
   late List<PlacedPallet> _pallets;
-  final Set<String> _selectedIds = {};
+
+  // Non-final: replaced with a new Set on each change so TrailerPainter's
+  // shouldRepaint (which uses reference equality) correctly triggers.
+  Set<String> _selectedIds = {};
+
+  // Incremented on every selection change; drives the TweenAnimationBuilder key
+  // so the flash animation restarts on each tap.
+  int _selectionVersion = 0;
 
   // Stores the palette hit in onTapDown; consumed by onTap or discarded by
   // onLongPress so the two gesture paths stay independent.
@@ -248,10 +255,25 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
 
     showModalBottomSheet<void>(
       context: ctx,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      constraints: const BoxConstraints(maxHeight: 280),
       builder: (_) => SafeArea(
+        top: false,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Drag handle
+            Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
             _actionTile(
               icon: Icons.arrow_back,
               label: AppStrings.get(widget.language, 'pallet_move_forward'),
@@ -262,7 +284,7 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
                   _loadPlan =
                       ManualPalletService.moveRowForward(_loadPlan, rowIndex);
                   _refreshPallets();
-                  _selectedIds.clear();
+                  _selectedIds = {};
                 });
               },
             ),
@@ -276,7 +298,7 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
                   _loadPlan =
                       ManualPalletService.moveRowBackward(_loadPlan, rowIndex);
                   _refreshPallets();
-                  _selectedIds.clear();
+                  _selectedIds = {};
                 });
               },
             ),
@@ -291,8 +313,8 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
                 if (!success) {
                   ScaffoldMessenger.of(ctx).showSnackBar(
                     SnackBar(
-                        content:
-                            Text(errorMsg ?? 'Rotation nicht möglich')),
+                      content: Text(errorMsg ?? 'Rotation nicht möglich'),
+                    ),
                   );
                 }
               },
@@ -304,10 +326,10 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
               enabled: true,
               onTap: () {
                 Navigator.of(ctx).pop();
-                setState(() => _selectedIds.clear());
+                setState(() => _selectedIds = {});
               },
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
           ],
         ),
       ),
@@ -320,11 +342,19 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
     required bool enabled,
     required VoidCallback onTap,
   }) {
-    return ListTile(
-      leading: Icon(icon, color: enabled ? null : Colors.grey),
-      title:
-          Text(label, style: TextStyle(color: enabled ? null : Colors.grey)),
+    final color = enabled ? null : Colors.grey;
+    return InkWell(
       onTap: enabled ? onTap : null,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: color),
+            const SizedBox(width: 16),
+            Text(label, style: TextStyle(fontSize: 14, color: color)),
+          ],
+        ),
+      ),
     );
   }
 
@@ -341,53 +371,55 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
           // onTapDown records which palette was hit; onTap applies the
           // toggle; onLongPress discards the pending hit and shows the menu.
           onTapDown: (details) {
-            final pos = details.localPosition;
-            debugPrint('tap: $pos | pallets: ${_pallets.length}');
-            if (_pallets.isNotEmpty) {
-              final last = _pallets.last;
-              final lastRect = ManualPalletService.calculatePalletScreenRect(
-                pallet: last,
-                loadPlan: _loadPlan,
-                trailerWidth: size.width,
-                trailerHeight: size.height,
-              );
-              debugPrint('last pallet: ${last.id} rect: $lastRect');
-            }
             _pendingPallet = ManualPalletService.findPalletAtPosition(
-              position: pos,
+              position: details.localPosition,
               pallets: _pallets,
               loadPlan: _loadPlan,
               trailerWidth: size.width,
               trailerHeight: size.height,
             );
-            debugPrint('hit: ${_pendingPallet?.id}');
           },
           onTap: () {
             final pallet = _pendingPallet;
             _pendingPallet = null;
             if (pallet == null) return;
+            // Create a new Set so TrailerPainter.shouldRepaint fires correctly.
+            final next = Set<String>.from(_selectedIds);
+            if (next.contains(pallet.id)) {
+              next.remove(pallet.id);
+            } else {
+              next.add(pallet.id);
+            }
             setState(() {
-              if (_selectedIds.contains(pallet.id)) {
-                _selectedIds.remove(pallet.id);
-              } else {
-                _selectedIds.add(pallet.id);
-              }
+              _selectedIds = next;
+              _selectionVersion++;
             });
           },
           // Long-press shows the action menu only when ≥1 palette is marked.
           onLongPress: () {
-            _pendingPallet = null; // discard pending tap
+            _pendingPallet = null;
             if (_selectedIds.isEmpty) return;
             _showActionMenu(outerContext);
           },
-          child: CustomPaint(
-            painter: TrailerPainter(
-              loadPlan: _loadPlan,
-              emptyText: AppStrings.get(widget.language, 'enter_pallets'),
-              epalImage: widget.epalImage,
-              selectedPalletIds: _selectedIds,
+          // TweenAnimationBuilder: brief opacity flash (0.5→1.0) on each
+          // selection change. ValueKey(_selectionVersion) restarts the
+          // animation on every tap so the feedback is always visible.
+          child: TweenAnimationBuilder<double>(
+            key: ValueKey(_selectionVersion),
+            tween: Tween(begin: 0.5, end: 1.0),
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+            builder: (_, opacity, child) =>
+                Opacity(opacity: opacity, child: child!),
+            child: CustomPaint(
+              painter: TrailerPainter(
+                loadPlan: _loadPlan,
+                emptyText: AppStrings.get(widget.language, 'enter_pallets'),
+                epalImage: widget.epalImage,
+                selectedPalletIds: _selectedIds,
+              ),
+              child: const SizedBox.expand(),
             ),
-            child: const SizedBox.expand(),
           ),
         );
       },
@@ -443,7 +475,8 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
                         RotatedBox(
                           quarterTurns: 3,
                           child: IconButton(
-                            icon: const Icon(Icons.close),
+                            icon: const Icon(Icons.close, size: 20),
+                            visualDensity: VisualDensity.compact,
                             tooltip: 'Schließen',
                             onPressed: () => Navigator.of(context).pop(),
                           ),
@@ -502,17 +535,18 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 4, 4),
+                padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
                 child: Row(
                   children: [
                     Expanded(
                       child: Text(
                         AppStrings.get(widget.language, 'trailer_enlarged'),
-                        style: textTheme.titleMedium,
+                        style: textTheme.titleSmall,
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.close),
+                      icon: const Icon(Icons.close, size: 20),
+                      visualDensity: VisualDensity.compact,
                       tooltip: 'Schließen',
                       onPressed: () => Navigator.of(context).pop(),
                     ),

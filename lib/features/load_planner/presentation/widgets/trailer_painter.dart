@@ -129,14 +129,21 @@ class TrailerPainter extends CustomPainter {
             ..style = PaintingStyle.stroke
             ..strokeWidth = 1.0);
 
-      // Highlight für ausgewählte Palette
       if (isSelected) {
+        // White semi-transparent overlay so the selection pops on any colour.
+        canvas.drawRect(
+          rect,
+          Paint()
+            ..color = const Color(0x40FFFFFF)
+            ..style = PaintingStyle.fill,
+        );
+        // Bold red border.
         canvas.drawRect(
           rect,
           Paint()
             ..color = Colors.red
             ..style = PaintingStyle.stroke
-            ..strokeWidth = 3.0,
+            ..strokeWidth = 3.5,
         );
       }
 
