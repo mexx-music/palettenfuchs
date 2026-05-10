@@ -5,6 +5,7 @@ import '../../logic/pallet_layout_engine.dart';
 import '../../logic/trailer_constants.dart';
 import '../../models/load_plan.dart';
 import '../../models/manual_load_seed.dart';
+import '../../models/placed_pallet.dart';
 import '../widgets/pallet_input_panel.dart';
 import '../widgets/trailer_load_view.dart';
 import '../widgets/weight_panel.dart';
@@ -93,10 +94,9 @@ class _LoadPlannerPageState extends State<LoadPlannerPage> {
     });
   }
 
-  void _onManualModeChanged(bool value) {
+  void _onManualPalletsAccepted(List<PlacedPallet> pallets) {
     setState(() {
-      _manualSeed = _manualSeed.copyWith(enabled: value);
-      _updatePlan();
+      _currentPlan = _currentPlan.copyWith(manualPallets: pallets);
     });
   }
 
@@ -134,15 +134,10 @@ class _LoadPlannerPageState extends State<LoadPlannerPage> {
               onTrailerTypeChanged: _onTrailerTypeChanged,
             ),
             const SizedBox(height: 20),
-            _ManualSeedToggle(
-              enabled: _manualSeed.enabled,
-              language: lang,
-              onChanged: _onManualModeChanged,
-            ),
-            const SizedBox(height: 20),
             TrailerLoadView(
               loadPlan: _currentPlan,
               language: lang,
+              onManualPalletsAccepted: _onManualPalletsAccepted,
             ),
             const SizedBox(height: 20),
             WeightPanel(
@@ -195,48 +190,3 @@ class _LanguageDropdown extends StatelessWidget {
   }
 }
 
-class _ManualSeedToggle extends StatelessWidget {
-  final bool enabled;
-  final AppLanguage language;
-  final ValueChanged<bool> onChanged;
-
-  const _ManualSeedToggle({
-    required this.enabled,
-    required this.language,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  AppStrings.get(language, 'manual_plan'),
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                Switch(value: enabled, onChanged: onChanged),
-              ],
-            ),
-            if (enabled) ...[
-              const SizedBox(height: 8),
-              Text(
-                AppStrings.get(language, 'manual_plan_hint'),
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: Colors.grey[600]),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}

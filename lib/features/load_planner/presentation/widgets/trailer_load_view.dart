@@ -14,10 +14,17 @@ class TrailerLoadView extends StatefulWidget {
   final LoadPlan loadPlan;
   final AppLanguage language;
 
+  /// Called when the user presses "Übernehmen" in the overlay and the
+  /// free-mode pallets pass validation.  The parent should store the list
+  /// and pass it back via [loadPlan.manualPallets] so the small view
+  /// re-renders accordingly.
+  final ValueChanged<List<PlacedPallet>>? onManualPalletsAccepted;
+
   const TrailerLoadView({
     super.key,
     required this.loadPlan,
     required this.language,
+    this.onManualPalletsAccepted,
   });
 
   @override
@@ -58,6 +65,7 @@ class _TrailerLoadViewState extends State<TrailerLoadView> {
         loadPlan: widget.loadPlan,
         language: widget.language,
         epalImage: _epalImage,
+        onManualPalletsAccepted: widget.onManualPalletsAccepted,
       ),
     );
   }
@@ -82,17 +90,27 @@ class _TrailerLoadViewState extends State<TrailerLoadView> {
             const SizedBox(height: 16),
 
             // Small view – tap only opens the overlay.
+            // Uses FreeModePainter when manualPallets have been accepted,
+            // otherwise falls back to the row-based TrailerPainter.
             GestureDetector(
               onTap: _openOverlay,
               child: SizedBox(
                 height: 250,
                 child: CustomPaint(
-                  painter: TrailerPainter(
-                    loadPlan: widget.loadPlan,
-                    emptyText:
-                        AppStrings.get(widget.language, 'enter_pallets'),
-                    epalImage: _epalImage,
-                  ),
+                  painter: widget.loadPlan.manualPallets != null
+                      ? FreeModePainter(
+                          pallets: widget.loadPlan.manualPallets!,
+                          loadPlan: widget.loadPlan,
+                          emptyText: AppStrings.get(
+                              widget.language, 'enter_pallets'),
+                          epalImage: _epalImage,
+                        )
+                      : TrailerPainter(
+                          loadPlan: widget.loadPlan,
+                          emptyText: AppStrings.get(
+                              widget.language, 'enter_pallets'),
+                          epalImage: _epalImage,
+                        ),
                   child: const SizedBox.expand(),
                 ),
               ),
@@ -131,8 +149,8 @@ class _TrailerLoadViewState extends State<TrailerLoadView> {
 
   Widget _buildLegend(BuildContext context) {
     return Wrap(
-      spacing: 8.0,
-      runSpacing: 8.0,
+      spacing: 6.0,
+      runSpacing: 6.0,
       children: [
         _legendChip(
           context,
@@ -155,28 +173,29 @@ class _TrailerLoadViewState extends State<TrailerLoadView> {
 
   Widget _legendChip(BuildContext context, String label, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 6.0),
+      padding: const EdgeInsets.symmetric(horizontal: 7.0, vertical: 4.0),
       decoration: BoxDecoration(
         border: Border.all(color: color, width: 1.5),
-        borderRadius: BorderRadius.circular(12.0),
+        borderRadius: BorderRadius.circular(10.0),
         color: color.withAlpha(20),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 10.0,
-            height: 10.0,
+            width: 8.0,
+            height: 8.0,
             decoration: BoxDecoration(
               color: color,
               shape: BoxShape.circle,
             ),
           ),
-          const SizedBox(width: 6.0),
+          const SizedBox(width: 4.0),
           Text(
             label,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: Colors.black87,
+                  fontSize: 11.0,
                 ),
           ),
         ],
@@ -194,11 +213,13 @@ class _SelectableTrailerOverlay extends StatefulWidget {
   final LoadPlan loadPlan;
   final AppLanguage language;
   final ui.Image? epalImage;
+  final ValueChanged<List<PlacedPallet>>? onManualPalletsAccepted;
 
   const _SelectableTrailerOverlay({
     required this.loadPlan,
     required this.language,
     this.epalImage,
+    this.onManualPalletsAccepted,
   });
 
   @override
@@ -211,6 +232,9 @@ class _SelectableTrailerOverlayState
   // Free-mode pallet list with absolute cm coordinates.
   // Built once from widget.loadPlan on init; only modified by overlay actions.
   late List<PlacedPallet> _freePallets;
+
+  // Pallet count at init time — used to guard against accidental count changes.
+  late int _originalPalletCount;
 
   // Non-final: replaced with a new Set on each change so FreeModePainter's
   // shouldRepaint (reference equality) correctly triggers.
@@ -226,7 +250,35 @@ class _SelectableTrailerOverlayState
   @override
   void initState() {
     super.initState();
-    _freePallets = ManualPalletService.extractFreePallets(widget.loadPlan);
+    // Restore previously accepted state when the overlay is re-opened.
+    _freePallets = widget.loadPlan.manualPallets != null
+        ? List<PlacedPallet>.from(widget.loadPlan.manualPallets!)
+        : ManualPalletService.extractFreePallets(widget.loadPlan);
+    _originalPalletCount = _freePallets.length;
+  }
+
+  // ---- Übernehmen -----------------------------------------------------------
+
+  void _onAccept(BuildContext ctx) {
+    // Bounds + overlap check.
+    final (valid, errorMsg) = ManualPalletService.validateFreePallets(
+      _freePallets,
+      widget.loadPlan.trailerType.trailerLengthCm,
+      widget.loadPlan.trailerType.trailerWidthCm,
+    );
+    if (!valid) {
+      ScaffoldMessenger.of(ctx).showSnackBar(
+          SnackBar(content: Text(errorMsg ?? 'Ungültiger Plan.')));
+      return;
+    }
+    // Safety: count must not have changed.
+    if (_freePallets.length != _originalPalletCount) {
+      ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
+          content: Text('Palettenanzahl darf nicht verändert werden.')));
+      return;
+    }
+    widget.onManualPalletsAccepted?.call(List<PlacedPallet>.unmodifiable(_freePallets));
+    Navigator.of(ctx).pop();
   }
 
   // ---- action helpers --------------------------------------------------------
@@ -492,14 +544,13 @@ class _SelectableTrailerOverlayState
                           ),
                         ),
                         const Spacer(),
-                        // Übernehmen placeholder
                         RotatedBox(
                           quarterTurns: 3,
                           child: IconButton(
                             icon: const Icon(Icons.check, size: 20),
                             visualDensity: VisualDensity.compact,
                             tooltip: 'Übernehmen',
-                            onPressed: () => Navigator.of(context).pop(),
+                            onPressed: () => _onAccept(context),
                           ),
                         ),
                         RotatedBox(
@@ -574,9 +625,8 @@ class _SelectableTrailerOverlayState
                         style: textTheme.titleSmall,
                       ),
                     ),
-                    // Übernehmen placeholder
                     OutlinedButton(
-                      onPressed: () => Navigator.of(context).pop(),
+                      onPressed: () => _onAccept(context),
                       style: OutlinedButton.styleFrom(
                         visualDensity: VisualDensity.compact,
                         padding: const EdgeInsets.symmetric(

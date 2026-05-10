@@ -58,6 +58,8 @@ class LoadPlan {
   /// Überschreitet den Ladeplan das Längenlimit?
   bool get isOverLimit => usedLengthCm > trailerMaxLengthCm;
 
+  /// [clearManualPallets] = true explicitly sets manualPallets to null
+  /// (needed because null in [manualPallets] would otherwise mean "keep current").
   LoadPlan copyWith({
     List<LoadRow>? rows,
     int? requestedEuroPallets,
@@ -67,6 +69,8 @@ class LoadPlan {
     TrailerType? trailerType,
     bool? hasManualSeedWarning,
     String? manualSeedWarningText,
+    List<PlacedPallet>? manualPallets,
+    bool clearManualPallets = false,
   }) {
     return LoadPlan(
       rows: rows ?? this.rows,
@@ -82,6 +86,8 @@ class LoadPlan {
           hasManualSeedWarning ?? this.hasManualSeedWarning,
       manualSeedWarningText:
           manualSeedWarningText ?? this.manualSeedWarningText,
+      manualPallets:
+          clearManualPallets ? null : (manualPallets ?? this.manualPallets),
     );
   }
 
