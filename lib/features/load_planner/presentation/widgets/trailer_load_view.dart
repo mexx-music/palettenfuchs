@@ -71,6 +71,10 @@ class _TrailerLoadViewState extends State<TrailerLoadView> {
               AppStrings.get(widget.language, 'trailer_top_view'),
               style: Theme.of(context).textTheme.titleMedium,
             ),
+            const SizedBox(height: 12),
+
+            // Legend below title
+            _buildLegend(context),
             const SizedBox(height: 16),
 
             // Tappable trailer graphic
@@ -119,6 +123,61 @@ class _TrailerLoadViewState extends State<TrailerLoadView> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildLegend(BuildContext context) {
+    return Wrap(
+      spacing: 8.0,
+      runSpacing: 8.0,
+      children: [
+        _legendChip(
+          context,
+          AppStrings.get(widget.language, 'legend_euro_transverse'),
+          Colors.blue,
+        ),
+        _legendChip(
+          context,
+          AppStrings.get(widget.language, 'legend_euro_long'),
+          Colors.green,
+        ),
+        _legendChip(
+          context,
+          AppStrings.get(widget.language, 'legend_industry'),
+          Colors.orange,
+        ),
+      ],
+    );
+  }
+
+  Widget _legendChip(BuildContext context, String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 6.0),
+      decoration: BoxDecoration(
+        border: Border.all(color: color, width: 1.5),
+        borderRadius: BorderRadius.circular(12.0),
+        color: color.withAlpha(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 10.0,
+            height: 10.0,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 6.0),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: Colors.black87,
+            ),
+          ),
+        ],
       ),
     );
   }

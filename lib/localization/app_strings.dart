@@ -60,6 +60,9 @@ class AppStrings {
       'start_button': 'App starten',
       'trailer_enlarged': 'Ladeplan vergrößert',
       'tap_to_enlarge': 'Zum Vergrößern antippen',
+      'legend_euro_transverse': 'Euro quer',
+      'legend_euro_long': 'Euro längs',
+      'legend_industry': 'Industriepalette',
     },
 
     // -----------------------------------------------------------------------
@@ -109,6 +112,9 @@ class AppStrings {
       'start_button': 'Start App',
       'trailer_enlarged': 'Load plan enlarged',
       'tap_to_enlarge': 'Tap to enlarge',
+      'legend_euro_transverse': 'Euro transverse',
+      'legend_euro_long': 'Euro longitudinal',
+      'legend_industry': 'Industrial pallet',
     },
 
     // -----------------------------------------------------------------------
@@ -160,6 +166,9 @@ class AppStrings {
       'start_button': 'Покрени апликацију',
       'trailer_enlarged': 'Увећан план утовара',
       'tap_to_enlarge': 'Додирните за увећање',
+      'legend_euro_transverse': 'Еуро попречно',
+      'legend_euro_long': 'Еуро уздужно',
+      'legend_industry': 'Индустријска палета',
     },
   };
 }
