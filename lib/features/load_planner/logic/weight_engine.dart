@@ -1,7 +1,20 @@
 import '../models/load_plan.dart';
 import '../models/pallet_type.dart';
 import '../models/placed_pallet.dart';
-import 'trailer_constants.dart';
+
+class PayloadCheckResult {
+  final double totalCargoKg;
+  final double practicalMaxPayloadKg;
+  final bool isWarning;
+  final bool isCritical;
+
+  const PayloadCheckResult({
+    required this.totalCargoKg,
+    required this.practicalMaxPayloadKg,
+    required this.isWarning,
+    required this.isCritical,
+  });
+}
 
 class WeightDistributionResult {
   final double totalWeightKg;
@@ -112,8 +125,21 @@ class WeightEngine {
     );
   }
 
-  /// Prüft, ob das Gewichtslimit überschritten ist
-  static bool isOverweight(LoadPlan plan) {
-    return plan.totalWeight > TrailerConstants.maxPayload;
+  /// Nutzlastprüfung gegen die praxisnahen Schwellwerte des Trailer-Typs.
+  /// [totalCargoKg] ist das reine Ladegewicht (Paletten), ohne Fahrzeugeigengewicht.
+  static PayloadCheckResult checkPayload(LoadPlan plan, double totalCargoKg) {
+    final type = plan.trailerType;
+    return PayloadCheckResult(
+      totalCargoKg: totalCargoKg,
+      practicalMaxPayloadKg: type.practicalMaxPayloadKg,
+      isWarning: totalCargoKg >= type.payloadWarningKg &&
+          totalCargoKg < type.payloadCriticalKg,
+      isCritical: totalCargoKg >= type.payloadCriticalKg,
+    );
+  }
+
+  /// Prüft, ob die Praxisgrenze des Trailer-Typs überschritten ist.
+  static bool isOverweight(LoadPlan plan, double totalCargoKg) {
+    return totalCargoKg > plan.trailerType.practicalMaxPayloadKg;
   }
 }

@@ -31,6 +31,9 @@ class LoadPlan {
 
   double get trailerMaxLengthCm => trailerType.trailerLengthCm;
 
+  /// Theoretische Maximallast des Trailer-Typs
+  double get maxPayload => trailerType.theoreticalMaxPayloadKg;
+
   /// Nicht platzierbare Paletten (Typgrenze oder Länge überschritten)
   int get unplacedEuroPallets =>
       (requestedEuroPallets - placedEuroPallets).clamp(0, requestedEuroPallets);

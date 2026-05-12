@@ -49,6 +49,11 @@ class AppStrings {
           'Sattellast wahrscheinlich zu hoch – Ladung weiter nach hinten verteilen oder Gewicht prüfen.',
       'axle_warning': 'Achtung: Sattellast nähert sich dem Grenzbereich.',
       'overload_warning': 'Ladefläche überschritten – bitte Anzahl reduzieren.',
+      'payload_practical_limit': 'Praxisgrenze',
+      'payload_warning':
+          'Praxisgrenze erreicht – Gesamtgewicht bitte prüfen.',
+      'payload_critical':
+          'Kritisch – vermutlich nahe 40 t oder darüber.',
       'start_title': 'Pal Fuchs',
       'start_subtitle': 'Dein Ladeplan-Assistent für Sattelzüge',
       'start_feature_load_plan': 'Ladefläche optimal planen',
@@ -105,6 +110,11 @@ class AppStrings {
           'Kingpin load likely too high – redistribute cargo rearward or check weight.',
       'axle_warning': 'Caution: Kingpin load approaching limit.',
       'overload_warning': 'Loading area exceeded – please reduce count.',
+      'payload_practical_limit': 'Practical limit',
+      'payload_warning':
+          'Practical limit reached – please verify gross weight.',
+      'payload_critical':
+          'Critical – likely near 40 t or above.',
       'start_title': 'Pallet Fox',
       'start_subtitle': 'Your load planning assistant for semi-trailers',
       'start_feature_load_plan': 'Plan the loading area optimally',
@@ -163,6 +173,11 @@ class AppStrings {
           'Оптерећење седлишта је вероватно превисоко – преместите терет или проверите тежину.',
       'axle_warning': 'Пажња: Оптерећење седлишта се приближава граници.',
       'overload_warning': 'Превазиђен простор за утовар – смањите број палета.',
+      'payload_practical_limit': 'Практична граница',
+      'payload_warning':
+          'Достигнута практична граница – проверите укупну масу.',
+      'payload_critical':
+          'Критично – вероватно близу 40 т или изнад.',
       'start_title': 'Pal Fuchs',
       'start_subtitle': 'Ваш асистент за планирање утовара',
       'start_feature_load_plan': 'Оптимално планирање простора за утовар',

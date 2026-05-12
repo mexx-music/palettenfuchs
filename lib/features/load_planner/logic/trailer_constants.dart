@@ -18,14 +18,11 @@ class TrailerConstants {
   /// Industrie-Palette Breite in cm
   static const double industryWidthCm = 100;
 
-  /// Maximales Gesamtgewicht in kg
+  /// Zulässiges Gesamtgewicht in kg (EU-Norm Sattelzug, 5 Achsen)
   static const double maxGrossWeight = 40000;
 
-  /// Eigengewicht des Sattelzugs in kg
-  static const double trailerTareWeight = 2500;
-
-  /// Maximale Ladefähigkeit in kg
-  static double get maxPayload => maxGrossWeight - trailerTareWeight;
+  /// Eigengewicht der Zugmaschine in kg
+  static const double tractorTareWeight = 7500;
 }
 
 enum TrailerType {
@@ -42,6 +39,46 @@ enum TrailerType {
   }
 
   double get trailerWidthCm => 240;
+
+  /// Theoretisches Maximum (GVW − Fahrzeuggewichte), gesetzliche Obergrenze
+  double get theoreticalMaxPayloadKg {
+    switch (this) {
+      case TrailerType.standard:
+        return 25500;
+      case TrailerType.frigo:
+        return 24000;
+    }
+  }
+
+  /// Praxisgrenze: empfohlenes Ladegewicht im Tagesgeschäft
+  double get practicalMaxPayloadKg {
+    switch (this) {
+      case TrailerType.standard:
+        return 24500;
+      case TrailerType.frigo:
+        return 23000;
+    }
+  }
+
+  /// Warnschwelle: ab hier auf Gesamtgewicht achten
+  double get payloadWarningKg {
+    switch (this) {
+      case TrailerType.standard:
+        return 24000;
+      case TrailerType.frigo:
+        return 22500;
+    }
+  }
+
+  /// Kritische Schwelle: nahe oder über 40 t
+  double get payloadCriticalKg {
+    switch (this) {
+      case TrailerType.standard:
+        return 25000;
+      case TrailerType.frigo:
+        return 23500;
+    }
+  }
 
   int get maxEuroPallets {
     switch (this) {

@@ -163,6 +163,41 @@ class WeightPanel extends StatelessWidget {
               _infoRow(context,
                   '${AppStrings.get(language, 'total_weight')}:', '$totalWeight kg',
                   bold: true),
+              const SizedBox(height: 6),
+              _infoRow(
+                context,
+                '${AppStrings.get(language, 'payload_practical_limit')}:',
+                '${loadPlan.trailerType.practicalMaxPayloadKg.round()} kg',
+              ),
+
+              // Nutzlast-Warnungen (getrennt von Achslastwarnung)
+              Builder(builder: (context) {
+                final payload = WeightEngine.checkPayload(
+                    loadPlan, totalWeight.toDouble());
+                if (payload.isCritical) {
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: _warningBox(
+                      context,
+                      color: Colors.red,
+                      icon: Icons.warning,
+                      message: AppStrings.get(language, 'payload_critical'),
+                    ),
+                  );
+                }
+                if (payload.isWarning) {
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: _warningBox(
+                      context,
+                      color: Colors.orange,
+                      icon: Icons.warning_amber,
+                      message: AppStrings.get(language, 'payload_warning'),
+                    ),
+                  );
+                }
+                return const SizedBox.shrink();
+              }),
 
               const SizedBox(height: 16),
               const Divider(),
