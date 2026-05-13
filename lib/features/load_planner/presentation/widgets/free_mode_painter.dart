@@ -18,6 +18,10 @@ class FreeModePainter extends CustomPainter {
   final List<PlacedPallet> pallets;
   final LoadPlan loadPlan;
   final Set<String> selectedPalletIds;
+  final Set<String> draggedPalletIds;
+  /// Current drag pointer position in canvas pixels — passed through now,
+  /// will be used to paint a ghost/target indicator once drag-drop lands.
+  final Offset? dragCurrentPosition;
   final ui.Image? epalImage;
   final String emptyText;
   final bool uniformScale;
@@ -26,6 +30,8 @@ class FreeModePainter extends CustomPainter {
     required this.pallets,
     required this.loadPlan,
     this.selectedPalletIds = const {},
+    this.draggedPalletIds = const {},
+    this.dragCurrentPosition,
     this.epalImage,
     this.emptyText = '',
     this.uniformScale = false,
@@ -120,8 +126,12 @@ class FreeModePainter extends CustomPainter {
       );
 
       final color = _colorFor(pallet.arrangement);
+      final isDragged = draggedPalletIds.contains(pallet.id);
       canvas.drawRect(
-          rect, Paint()..color = color..style = PaintingStyle.fill);
+          rect,
+          Paint()
+            ..color = isDragged ? color.withAlpha(100) : color
+            ..style = PaintingStyle.fill);
       canvas.drawRect(
           rect,
           Paint()
@@ -267,6 +277,8 @@ class FreeModePainter extends CustomPainter {
       pallets != oldDelegate.pallets ||
       loadPlan != oldDelegate.loadPlan ||
       selectedPalletIds != oldDelegate.selectedPalletIds ||
+      draggedPalletIds != oldDelegate.draggedPalletIds ||
+      dragCurrentPosition != oldDelegate.dragCurrentPosition ||
       epalImage != oldDelegate.epalImage ||
       uniformScale != oldDelegate.uniformScale;
 }

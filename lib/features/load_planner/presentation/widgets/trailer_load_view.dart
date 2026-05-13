@@ -258,9 +258,15 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
 
   final List<_OverlayUndoSnapshot> _undoHistory = [];
 
-  // Stores the palette hit in onTapDown; consumed by onTap or discarded by
-  // onLongPress so the two gesture paths stay independent.
+  // Stores the pallet hit in onTapDown; consumed by onTap/onPanStart or
+  // discarded by onLongPress so the gesture paths stay independent.
   PlacedPallet? _pendingPallet;
+
+  // Drag-and-Drop state (prepared — actual position change not yet implemented).
+  Offset? _dragStartPosition;
+  Offset? _dragCurrentPosition;
+  Set<String> _draggedPalletIds = {};
+  bool get _isDragging => _dragStartPosition != null;
 
   @override
   void initState() {
@@ -368,7 +374,7 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
     onSuccess();
   }
 
-  // ---- action menu ----------------------------------------------------------
+  // ---- action menu (long-press bottom sheet) --------------------------------
 
   void _showActionMenu(BuildContext ctx) {
     if (_selectedIds.isEmpty) return;
@@ -381,8 +387,6 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
       constraints: const BoxConstraints(maxHeight: 360),
       builder: (_) => StatefulBuilder(
         builder: (_, setSheetState) {
-          // Re-derive group range on every sheet rebuild so buttons update
-          // after each move.
           final range = ManualPalletService.findSelectionRange(
             _freePallets,
             _selectedIds,
@@ -397,7 +401,6 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Drag handle
                 Container(
                   width: 36,
                   height: 4,
@@ -571,6 +574,264 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
     );
   }
 
+  // ---- side panels ----------------------------------------------------------
+
+  /// Collapsible help sheet for portrait/mobile mode.
+  void _showHelpSheet(BuildContext ctx) {
+    final hints = <(IconData, String)>[
+      (Icons.touch_app_outlined, 'Tippen: Palette markieren'),
+      (Icons.select_all, 'Mehrfachauswahl möglich'),
+      (Icons.touch_app, 'Lange drücken: Aktionen öffnen'),
+      (Icons.refresh, 'Drehen: Palette umstellen'),
+      (Icons.check_circle_outline, 'Übernehmen: Korrektur speichern'),
+    ];
+    showModalBottomSheet<void>(
+      context: ctx,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Text(
+                'Bedienhilfe',
+                style: Theme.of(ctx).textTheme.titleSmall,
+              ),
+              const SizedBox(height: 12),
+              ...hints.map(
+                (h) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 5),
+                  child: Row(
+                    children: [
+                      Icon(h.$1, size: 18, color: Colors.grey[600]),
+                      const SizedBox(width: 12),
+                      Text(h.$2, style: Theme.of(ctx).textTheme.bodySmall),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Left help panel — shown in landscape/desktop next to the trailer.
+  Widget _buildHelpPanel(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final hints = <(IconData, String)>[
+      (Icons.touch_app_outlined, 'Tippen: Palette markieren'),
+      (Icons.select_all, 'Mehrfachauswahl möglich'),
+      (Icons.touch_app, 'Lange drücken: Aktionen öffnen'),
+      (Icons.refresh, 'Drehen: Palette umstellen'),
+      (Icons.check_circle_outline, 'Übernehmen: Korrektur speichern'),
+    ];
+    return Container(
+      color: scheme.surfaceContainerLow,
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Bedienhilfe',
+            style: textTheme.labelMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: scheme.onSurface.withAlpha(160),
+            ),
+          ),
+          const SizedBox(height: 10),
+          ...hints.map(
+            (h) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 1),
+                    child: Icon(
+                      h.$1,
+                      size: 14,
+                      color: scheme.onSurface.withAlpha(130),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      h.$2,
+                      style: textTheme.bodySmall?.copyWith(height: 1.35),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Right selection/action panel — shown in landscape/desktop next to the trailer.
+  Widget _buildSelectionPanel(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final hasSelection = _selectedIds.isNotEmpty;
+
+    Widget content;
+    if (!hasSelection) {
+      content = Text(
+        'Palette antippen\num sie zu markieren.',
+        style: textTheme.bodySmall?.copyWith(
+          color: scheme.onSurface.withAlpha(120),
+          height: 1.4,
+        ),
+      );
+    } else {
+      final range = ManualPalletService.findSelectionRange(
+        _freePallets,
+        _selectedIds,
+      );
+      final canForward = range.groupStart > 0;
+      final canBackward =
+          range.groupEnd >= 0 && range.groupEnd < range.totalSlots - 1;
+
+      content = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '${_selectedIds.length} Palette${_selectedIds.length > 1 ? 'n' : ''} markiert',
+            style: textTheme.bodySmall,
+          ),
+          const SizedBox(height: 12),
+          _sideActionButton(
+            context,
+            icon: Icons.arrow_upward,
+            label: AppStrings.get(widget.language, 'pallet_move_forward'),
+            enabled: canForward,
+            onTap: () => _tryMoveGroup(context, forward: true, onSuccess: () {}),
+          ),
+          const SizedBox(height: 6),
+          _sideActionButton(
+            context,
+            icon: Icons.refresh,
+            label: AppStrings.get(widget.language, 'pallet_rotate'),
+            enabled: true,
+            onTap: () => _tryRotateSmart(context, () {}),
+          ),
+          const SizedBox(height: 6),
+          _sideActionButton(
+            context,
+            icon: Icons.arrow_downward,
+            label: AppStrings.get(widget.language, 'pallet_move_backward'),
+            enabled: canBackward,
+            onTap: () =>
+                _tryMoveGroup(context, forward: false, onSuccess: () {}),
+          ),
+          const SizedBox(height: 14),
+          _sideActionButton(
+            context,
+            icon: Icons.deselect,
+            label: AppStrings.get(widget.language, 'pallet_clear_selection'),
+            enabled: true,
+            danger: true,
+            onTap: () => setState(() {
+              _selectedIds = {};
+              _selectionVersion++;
+            }),
+          ),
+        ],
+      );
+    }
+
+    return Container(
+      color: scheme.surfaceContainerLow,
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Auswahl',
+            style: textTheme.labelMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: scheme.onSurface.withAlpha(160),
+            ),
+          ),
+          const SizedBox(height: 8),
+          content,
+        ],
+      ),
+    );
+  }
+
+  Widget _sideActionButton(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required bool enabled,
+    required VoidCallback onTap,
+    bool danger = false,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    final color = danger
+        ? Colors.red.shade700
+        : (enabled ? scheme.primary : Colors.grey.shade400);
+    final bg = enabled
+        ? (danger
+            ? Colors.red.withAlpha(18)
+            : scheme.primaryContainer.withAlpha(60))
+        : Colors.grey[100]!;
+    final borderColor = enabled ? color.withAlpha(100) : Colors.grey[300]!;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: enabled ? onTap : null,
+      child: Ink(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: borderColor),
+          color: bg,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: Row(
+          children: [
+            Icon(icon, size: 15, color: color),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  color: color,
+                  fontWeight: FontWeight.w500,
+                  height: 1.2,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ---- trailer area ---------------------------------------------------------
 
   Widget _buildTrailerArea(BuildContext outerContext) {
@@ -581,33 +842,34 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
       builder: (context, constraints) {
         final size = constraints.biggest;
 
-        // Pre-compute the same uniform-scale transform the painter uses so the
+        // Pre-compute the uniform-scale transform the painter uses so the
         // hit test stays pixel-accurate even when the trailer is centred.
-        // ManualPalletService.findFreePalletAtPosition always places the trailer
-        // origin at (padding, padding), so we shift the raw tap position by the
-        // extra centering offset and pass effective dimensions that imply the
-        // same uniform scale.
         final t = FreeModePainter.computeTransform(size, trailerL, trailerW);
         final effectiveW = t.scale * trailerL + 2 * FreeModePainter.padding;
         final effectiveH = t.scale * trailerW + 2 * FreeModePainter.padding;
 
+        // Shared hit-test helper: adjusts raw canvas position to the
+        // coordinate space ManualPalletService expects (padding-relative origin).
+        PlacedPallet? hitTest(Offset localPos) {
+          final adjusted = Offset(
+            localPos.dx - (t.offsetX - FreeModePainter.padding),
+            localPos.dy - (t.offsetY - FreeModePainter.padding),
+          );
+          return ManualPalletService.findFreePalletAtPosition(
+            position: adjusted,
+            pallets: _freePallets,
+            trailerLengthCm: trailerL,
+            trailerWidthCm: trailerW,
+            screenWidth: effectiveW,
+            screenHeight: effectiveH,
+          );
+        }
+
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
+          // ---- tap: select / deselect -----------------------------------------
           onTapDown: (details) {
-            final adjustedPos = Offset(
-              details.localPosition.dx -
-                  (t.offsetX - FreeModePainter.padding),
-              details.localPosition.dy -
-                  (t.offsetY - FreeModePainter.padding),
-            );
-            _pendingPallet = ManualPalletService.findFreePalletAtPosition(
-              position: adjustedPos,
-              pallets: _freePallets,
-              trailerLengthCm: trailerL,
-              trailerWidthCm: trailerW,
-              screenWidth: effectiveW,
-              screenHeight: effectiveH,
-            );
+            _pendingPallet = hitTest(details.localPosition);
           },
           onTap: () {
             final pallet = _pendingPallet;
@@ -624,10 +886,46 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
               _selectionVersion++;
             });
           },
+          // ---- long press: action menu ----------------------------------------
           onLongPress: () {
             _pendingPallet = null;
             if (_selectedIds.isEmpty) return;
             _showActionMenu(outerContext);
+          },
+          // ---- pan: drag-and-drop (state only — no position change yet) --------
+          onPanStart: (details) {
+            final pallet = _pendingPallet;
+            _pendingPallet = null;
+            if (pallet == null) return;
+            setState(() {
+              _dragStartPosition = details.localPosition;
+              _dragCurrentPosition = details.localPosition;
+              // Drag the whole selection if the hit pallet is part of it,
+              // otherwise drag only the hit pallet.
+              _draggedPalletIds = _selectedIds.contains(pallet.id)
+                  ? Set<String>.from(_selectedIds)
+                  : {pallet.id};
+            });
+          },
+          onPanUpdate: (details) {
+            if (!_isDragging) return;
+            setState(() => _dragCurrentPosition = details.localPosition);
+          },
+          onPanEnd: (_) {
+            if (!_isDragging) return;
+            setState(() {
+              _dragStartPosition = null;
+              _dragCurrentPosition = null;
+              _draggedPalletIds = {};
+            });
+          },
+          onPanCancel: () {
+            if (!_isDragging) return;
+            setState(() {
+              _dragStartPosition = null;
+              _dragCurrentPosition = null;
+              _draggedPalletIds = {};
+            });
           },
           child: TweenAnimationBuilder<double>(
             key: ValueKey(_selectionVersion),
@@ -643,6 +941,8 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
                 emptyText: AppStrings.get(widget.language, 'enter_pallets'),
                 epalImage: widget.epalImage,
                 selectedPalletIds: _selectedIds,
+                draggedPalletIds: _draggedPalletIds,
+                dragCurrentPosition: _dragCurrentPosition,
                 uniformScale: true,
               ),
               child: const SizedBox.expand(),
@@ -683,7 +983,7 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
               elevation: 6,
               child: Row(
                 children: [
-                  // Left strip → TOP in rotated view.
+                  // Left strip → TOP in rotated view: title + help + actions.
                   SizedBox(
                     width: 56,
                     child: Column(
@@ -698,6 +998,15 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
                           ),
                         ),
                         const Spacer(),
+                        RotatedBox(
+                          quarterTurns: 3,
+                          child: IconButton(
+                            icon: const Icon(Icons.help_outline, size: 20),
+                            visualDensity: VisualDensity.compact,
+                            tooltip: 'Bedienhilfe',
+                            onPressed: () => _showHelpSheet(context),
+                          ),
+                        ),
                         RotatedBox(
                           quarterTurns: 3,
                           child: IconButton(
@@ -739,7 +1048,7 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
                     ),
                   ),
                   Container(width: 1, color: scheme.outlineVariant),
-                  // Right strip → BOTTOM in rotated view.
+                  // Right strip → BOTTOM in rotated view: dimensions.
                   SizedBox(
                     width: 44,
                     child: Center(
@@ -764,7 +1073,7 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
       );
     }
 
-    // Desktop / tablet in landscape: centred, constrained dialog.
+    // Desktop / tablet in landscape: centred, constrained dialog with side panels.
     final panelW = (sw - 48).clamp(300.0, 1100.0);
     final panelH = (sh - 80).clamp(300.0, 620.0);
     return Dialog(
@@ -780,6 +1089,7 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
           elevation: 6,
           child: Column(
             children: [
+              // Top header bar.
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
                 child: Row(
@@ -825,12 +1135,31 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
                 ),
               ),
               Divider(height: 1, color: scheme.outlineVariant),
+              // Main area: help panel | trailer | selection panel.
               Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: _buildTrailerArea(context),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(
+                      width: 150,
+                      child: _buildHelpPanel(context),
+                    ),
+                    Container(width: 1, color: scheme.outlineVariant),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: _buildTrailerArea(context),
+                      ),
+                    ),
+                    Container(width: 1, color: scheme.outlineVariant),
+                    SizedBox(
+                      width: 150,
+                      child: _buildSelectionPanel(context),
+                    ),
+                  ],
                 ),
               ),
+              // Bottom: trailer dimensions.
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                 child: Align(
