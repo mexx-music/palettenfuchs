@@ -624,14 +624,14 @@ class PalletLayoutEngine {
     int remaining = totalPallets;
 
     while (remaining >= 2 &&
-        usedLength + TrailerConstants.industryLengthCm <= trailerLengthCm) {
+        usedLength + TrailerConstants.industryWidthCm <= trailerLengthCm) {
       rows.add(LoadRow(
         index: rowIndex++,
         arrangement: RowArrangement.industryLongi2,
         palletCount: 2,
         weight: 0,
       ));
-      usedLength += TrailerConstants.industryLengthCm;
+      usedLength += TrailerConstants.industryWidthCm;
       remaining -= 2;
     }
 

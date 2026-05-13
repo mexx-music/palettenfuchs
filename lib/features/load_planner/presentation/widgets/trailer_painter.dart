@@ -251,8 +251,8 @@ class TrailerPainter extends CustomPainter {
         return [[xCm, 60, 80, 120]];
       case RowArrangement.industryLongi2:
         return [
-          [xCm, 20, 120, 100],
-          [xCm, 120, 120, 100],
+          [xCm, 0, 100, 120],
+          [xCm, 120, 100, 120],
         ];
       case RowArrangement.industrySingle:
         return [[xCm, 70, 120, 100]];

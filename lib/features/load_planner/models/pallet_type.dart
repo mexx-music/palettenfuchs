@@ -15,7 +15,7 @@ enum RowArrangement {
   euroLongi3('Euro längs (3er)', 3, 120), // 3 Paletten à 80cm = 240cm Breite
   euroTransverse2('Euro quer (2er)', 2, 80), // 2 Paletten à 120cm = 240cm Breite
   euroTransverseSingle('Euro quer (einzeln)', 1, 80), // 1 Palette à 120cm
-  industryLongi2('Industrie längs (2er)', 2, 120), // 2 Paletten à 100cm = 200cm Breite
+  industryLongi2('Industrie quer (2er)', 2, 100), // 2 Paletten à 120cm = 240cm Breite, 100cm in Fahrtrichtung
   industrySingle('Industrie (einzeln)', 1, 120); // 1 Palette à 120cm
 
   final String label;

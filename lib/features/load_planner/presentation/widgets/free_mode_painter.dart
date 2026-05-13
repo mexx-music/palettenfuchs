@@ -1,3 +1,4 @@
+import 'dart:math' show min;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -7,12 +8,19 @@ import '../../models/pallet_type.dart';
 
 /// Paints a free-mode pallet list (absolute cm coordinates per pallet).
 /// Drop-in replacement for TrailerPainter in the sandbox overlay.
+///
+/// When [uniformScale] is true the painter uses a single px/cm factor for
+/// both axes (BoxFit.contain equivalent), so every pallet is drawn with its
+/// real physical proportions.  The trailer is centred inside the canvas.
+/// When false (default) the old stretch-to-fill behaviour is preserved –
+/// suitable for the small thumbnail view.
 class FreeModePainter extends CustomPainter {
   final List<PlacedPallet> pallets;
   final LoadPlan loadPlan;
   final Set<String> selectedPalletIds;
   final ui.Image? epalImage;
   final String emptyText;
+  final bool uniformScale;
 
   const FreeModePainter({
     required this.pallets,
@@ -20,39 +28,82 @@ class FreeModePainter extends CustomPainter {
     this.selectedPalletIds = const {},
     this.epalImage,
     this.emptyText = '',
+    this.uniformScale = false,
   });
 
-  static const double _padding = 20.0;
+  /// Padding between the canvas edge and the trailer border (px).
+  static const double padding = 20.0;
   static const Color _epalStampColor = Color(0x69503214);
+
+  // ---------------------------------------------------------------------------
+  // Public geometry helper – called by the overlay to align its hit test.
+  // ---------------------------------------------------------------------------
+
+  /// Returns the uniform scale factor and the top-left origin of the trailer
+  /// rectangle inside a canvas of [size].
+  ///
+  /// The trailer is scaled down uniformly to fit within the drawable area
+  /// (canvas minus [padding] on every side) and then centred.
+  static ({double scale, double offsetX, double offsetY}) computeTransform(
+    Size size,
+    double trailerLengthCm,
+    double trailerWidthCm,
+  ) {
+    final drawableW = size.width - 2 * padding;
+    final drawableH = size.height - 2 * padding;
+    final scale =
+        min(drawableW / trailerLengthCm, drawableH / trailerWidthCm);
+    final offsetX = padding + (drawableW - scale * trailerLengthCm) / 2;
+    final offsetY = padding + (drawableH - scale * trailerWidthCm) / 2;
+    return (scale: scale, offsetX: offsetX, offsetY: offsetY);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Paint
+  // ---------------------------------------------------------------------------
 
   @override
   void paint(Canvas canvas, Size size) {
     final trailerLengthCm = loadPlan.trailerType.trailerLengthCm;
     final trailerWidthCm = loadPlan.trailerType.trailerWidthCm;
 
-    final drawableWidth = size.width - 2 * _padding;
-    final drawableHeight = size.height - 2 * _padding;
+    final double sx, sy, originX, originY;
 
+    if (uniformScale) {
+      final t = computeTransform(size, trailerLengthCm, trailerWidthCm);
+      sx = t.scale;
+      sy = t.scale;
+      originX = t.offsetX;
+      originY = t.offsetY;
+    } else {
+      final drawableW = size.width - 2 * padding;
+      final drawableH = size.height - 2 * padding;
+      sx = drawableW / trailerLengthCm;
+      sy = drawableH / trailerWidthCm;
+      originX = padding;
+      originY = padding;
+    }
+
+    final trailerPixelW = sx * trailerLengthCm;
+    final trailerPixelH = sy * trailerWidthCm;
     final trailerRect =
-        Rect.fromLTWH(_padding, _padding, drawableWidth, drawableHeight);
+        Rect.fromLTWH(originX, originY, trailerPixelW, trailerPixelH);
+
     canvas.drawRect(trailerRect, Paint()..color = Colors.lightBlue[100]!);
 
     if (pallets.isEmpty) {
       _drawBorder(canvas, trailerRect);
-      _drawEmptyState(canvas, size);
+      _drawEmptyState(canvas, trailerRect);
       return;
     }
-
-    final scaleX = drawableWidth / trailerLengthCm;
-    final scaleY = drawableHeight / trailerWidthCm;
 
     canvas.save();
     canvas.clipRect(trailerRect);
 
-    // Centre line (trailer mid-axis)
+    // Centre line (trailer mid-axis, running front-to-rear).
     canvas.drawLine(
-      Offset(trailerRect.left, trailerRect.top + drawableHeight / 2),
-      Offset(trailerRect.right, trailerRect.top + drawableHeight / 2),
+      Offset(trailerRect.left, trailerRect.top + trailerPixelH / 2),
+      Offset(trailerRect.right, trailerRect.top + trailerPixelH / 2),
       Paint()
         ..color = Colors.grey[400]!
         ..strokeWidth = 0.5,
@@ -62,10 +113,10 @@ class FreeModePainter extends CustomPainter {
       if (!pallet.isFreeMode) continue;
 
       final rect = Rect.fromLTWH(
-        _padding + pallet.xCm! * scaleX,
-        _padding + pallet.yCm! * scaleY,
-        pallet.widthCm! * scaleX,
-        pallet.heightCm! * scaleY,
+        originX + pallet.xCm! * sx,
+        originY + pallet.yCm! * sy,
+        pallet.widthCm! * sx,
+        pallet.heightCm! * sy,
       );
 
       final color = _colorFor(pallet.arrangement);
@@ -114,7 +165,7 @@ class FreeModePainter extends CustomPainter {
     );
   }
 
-  void _drawEmptyState(Canvas canvas, Size size) {
+  void _drawEmptyState(Canvas canvas, Rect trailerRect) {
     final tp = TextPainter(
       text: TextSpan(
         text: emptyText,
@@ -122,10 +173,13 @@ class FreeModePainter extends CustomPainter {
       ),
       textDirection: TextDirection.ltr,
     );
-    tp.layout();
+    tp.layout(maxWidth: trailerRect.width);
     tp.paint(
       canvas,
-      Offset(size.width / 2 - tp.width / 2, size.height / 2 - tp.height / 2),
+      Offset(
+        trailerRect.center.dx - tp.width / 2,
+        trailerRect.center.dy - tp.height / 2,
+      ),
     );
   }
 
@@ -213,5 +267,6 @@ class FreeModePainter extends CustomPainter {
       pallets != oldDelegate.pallets ||
       loadPlan != oldDelegate.loadPlan ||
       selectedPalletIds != oldDelegate.selectedPalletIds ||
-      epalImage != oldDelegate.epalImage;
+      epalImage != oldDelegate.epalImage ||
+      uniformScale != oldDelegate.uniformScale;
 }

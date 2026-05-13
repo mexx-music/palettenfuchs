@@ -580,16 +580,33 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = constraints.biggest;
+
+        // Pre-compute the same uniform-scale transform the painter uses so the
+        // hit test stays pixel-accurate even when the trailer is centred.
+        // ManualPalletService.findFreePalletAtPosition always places the trailer
+        // origin at (padding, padding), so we shift the raw tap position by the
+        // extra centering offset and pass effective dimensions that imply the
+        // same uniform scale.
+        final t = FreeModePainter.computeTransform(size, trailerL, trailerW);
+        final effectiveW = t.scale * trailerL + 2 * FreeModePainter.padding;
+        final effectiveH = t.scale * trailerW + 2 * FreeModePainter.padding;
+
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTapDown: (details) {
+            final adjustedPos = Offset(
+              details.localPosition.dx -
+                  (t.offsetX - FreeModePainter.padding),
+              details.localPosition.dy -
+                  (t.offsetY - FreeModePainter.padding),
+            );
             _pendingPallet = ManualPalletService.findFreePalletAtPosition(
-              position: details.localPosition,
+              position: adjustedPos,
               pallets: _freePallets,
               trailerLengthCm: trailerL,
               trailerWidthCm: trailerW,
-              screenWidth: size.width,
-              screenHeight: size.height,
+              screenWidth: effectiveW,
+              screenHeight: effectiveH,
             );
           },
           onTap: () {
@@ -626,6 +643,7 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
                 emptyText: AppStrings.get(widget.language, 'enter_pallets'),
                 epalImage: widget.epalImage,
                 selectedPalletIds: _selectedIds,
+                uniformScale: true,
               ),
               child: const SizedBox.expand(),
             ),
