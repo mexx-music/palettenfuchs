@@ -953,6 +953,153 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
     );
   }
 
+  // ---- compact help bar (tablet landscape) ----------------------------------
+
+  Widget _buildCompactHelpBar(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final style = Theme.of(context).textTheme.labelSmall?.copyWith(
+      color: scheme.onSurface.withAlpha(160),
+    );
+    final iconColor = scheme.onSurface.withAlpha(130);
+
+    Widget hint(IconData icon, String text) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 13, color: iconColor),
+        const SizedBox(width: 3),
+        Text(text, style: style, overflow: TextOverflow.ellipsis),
+      ],
+    );
+
+    return Container(
+      color: scheme.surfaceContainerLow,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+      child: Row(
+        children: [
+          Flexible(child: hint(Icons.touch_app_outlined, 'Tippen: Markieren')),
+          const SizedBox(width: 14),
+          Flexible(child: hint(Icons.select_all, 'Mehrfachauswahl')),
+          const SizedBox(width: 14),
+          Flexible(child: hint(Icons.touch_app, 'Lange drücken: Aktionen')),
+          const SizedBox(width: 14),
+          Flexible(child: hint(Icons.refresh, 'Drehen')),
+          const Spacer(),
+          InkWell(
+            onTap: () => _showHelpSheet(context),
+            borderRadius: BorderRadius.circular(4),
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: Icon(Icons.help_outline, size: 16, color: iconColor),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---- compact selection action bar (tablet landscape) ---------------------
+
+  Widget _buildCompactSelectionBar(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final range = ManualPalletService.findSelectionRange(
+      _freePallets,
+      _selectedIds,
+    );
+    final canForward = range.groupStart > 0;
+    final canBackward =
+        range.groupEnd >= 0 && range.groupEnd < range.totalSlots - 1;
+
+    return Container(
+      color: scheme.surfaceContainerLow,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Row(
+        children: [
+          Text(
+            '${_selectedIds.length}'
+            ' Palette${_selectedIds.length > 1 ? 'n' : ''} markiert',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 10),
+          _compactSelectionButton(
+            context,
+            icon: Icons.arrow_upward,
+            label: AppStrings.get(widget.language, 'pallet_move_forward'),
+            enabled: canForward,
+            onTap: () =>
+                _tryMoveGroup(context, forward: true, onSuccess: () {}),
+          ),
+          const SizedBox(width: 6),
+          _compactSelectionButton(
+            context,
+            icon: Icons.refresh,
+            label: AppStrings.get(widget.language, 'pallet_rotate'),
+            enabled: true,
+            onTap: () => _tryRotateSmart(context, () {}),
+          ),
+          const SizedBox(width: 6),
+          _compactSelectionButton(
+            context,
+            icon: Icons.arrow_downward,
+            label: AppStrings.get(widget.language, 'pallet_move_backward'),
+            enabled: canBackward,
+            onTap: () =>
+                _tryMoveGroup(context, forward: false, onSuccess: () {}),
+          ),
+          const Spacer(),
+          _compactSelectionButton(
+            context,
+            icon: Icons.deselect,
+            label: AppStrings.get(widget.language, 'pallet_clear_selection'),
+            enabled: true,
+            danger: true,
+            onTap: () => setState(() {
+              _selectedIds = {};
+              _selectionVersion++;
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _compactSelectionButton(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required bool enabled,
+    required VoidCallback onTap,
+    bool danger = false,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    final color = danger
+        ? Colors.red.shade700
+        : (enabled ? scheme.primary : Colors.grey.shade400);
+    return InkWell(
+      borderRadius: BorderRadius.circular(6),
+      onTap: enabled ? onTap : null,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 15, color: color),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: color,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ---- build ----------------------------------------------------------------
 
   @override
@@ -961,6 +1108,9 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
     final sw = media.size.width;
     final sh = media.size.height;
     final isPortrait = sh > sw;
+    // Tablet / iPad landscape: screens narrower than 1440 logical px get the
+    // compact full-width layout without fixed side panels.
+    final isTabletLandscape = !isPortrait && sw < 1440;
     final scheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final trailerL = widget.loadPlan.trailerType.trailerLengthCm;
@@ -1073,7 +1223,113 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
       );
     }
 
-    // Desktop / tablet in landscape: centred, constrained dialog with side panels.
+    // Tablet / iPad landscape: full-width dialog, no side panels.
+    // The trailer graphic fills almost all available space; help info is shown
+    // in a compact bar at the top and selection actions appear as a bottom bar.
+    if (isTabletLandscape) {
+      return Dialog(
+        insetPadding: EdgeInsets.zero,
+        backgroundColor: Colors.transparent,
+        child: SizedBox(
+          width: sw,
+          height: sh,
+          child: Material(
+            color: scheme.surface,
+            elevation: 0,
+            child: SafeArea(
+              child: Column(
+                children: [
+                  // ---- Header -----------------------------------------------
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            AppStrings.get(
+                              widget.language,
+                              'trailer_enlarged',
+                            ),
+                            style: textTheme.titleSmall,
+                          ),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed:
+                              _undoHistory.isEmpty ? null : _undoLastChange,
+                          style: OutlinedButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 3,
+                            ),
+                          ),
+                          icon: const Icon(Icons.undo, size: 16),
+                          label: Text(
+                            AppStrings.get(widget.language, 'undo'),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        OutlinedButton(
+                          onPressed: () => _onAccept(context),
+                          style: OutlinedButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 3,
+                            ),
+                          ),
+                          child: const Text('Übernehmen'),
+                        ),
+                        const SizedBox(width: 4),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 20),
+                          visualDensity: VisualDensity.compact,
+                          tooltip: 'Schließen',
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Divider(height: 1, color: scheme.outlineVariant),
+                  // ---- Compact help bar -------------------------------------
+                  _buildCompactHelpBar(context),
+                  Divider(height: 1, color: scheme.outlineVariant),
+                  // ---- Trailer area — fills all remaining vertical space ----
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: _buildTrailerArea(context),
+                    ),
+                  ),
+                  // ---- Selection action bar (visible only when selected) ----
+                  if (_selectedIds.isNotEmpty) ...[
+                    Divider(height: 1, color: scheme.outlineVariant),
+                    _buildCompactSelectionBar(context),
+                  ],
+                  // ---- Dimensions footer ------------------------------------
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Innenmaße: ${trailerW.toStringAsFixed(0)} cm'
+                        ' × ${trailerL.toStringAsFixed(0)} cm',
+                        style: textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurface.withAlpha(153),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Desktop landscape: centred, constrained dialog with side panels.
+    // Only reached when sw >= 1440 (large monitors).
     final panelW = (sw - 48).clamp(300.0, 1100.0);
     final panelH = (sh - 80).clamp(300.0, 620.0);
     return Dialog(
@@ -1135,7 +1391,7 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
                 ),
               ),
               Divider(height: 1, color: scheme.outlineVariant),
-              // Main area: help panel | trailer | selection panel.
+              // Main area: help panel | trailer | selection panel (desktop only).
               Expanded(
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
