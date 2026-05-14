@@ -262,10 +262,13 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
   // discarded by onLongPress so the gesture paths stay independent.
   PlacedPallet? _pendingPallet;
 
-  // Drag-and-Drop state (prepared — actual position change not yet implemented).
+  // Drag-and-Drop state.
   Offset? _dragStartPosition;
   Offset? _dragCurrentPosition;
   Set<String> _draggedPalletIds = {};
+  // Snapshot of [_freePallets] taken when a drag begins — used for live
+  // preview delta computation and for rollback on an invalid drop.
+  List<PlacedPallet>? _dragStartPallets;
   bool get _isDragging => _dragStartPosition != null;
 
   @override
@@ -387,14 +390,8 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
       constraints: const BoxConstraints(maxHeight: 360),
       builder: (_) => StatefulBuilder(
         builder: (_, setSheetState) {
-          final range = ManualPalletService.findSelectionRange(
-            _freePallets,
-            _selectedIds,
-          );
-          final canMoveForward = range.groupStart > 0;
-          final canMoveBackward =
-              range.groupEnd >= 0 && range.groupEnd < range.totalSlots - 1;
-          final canRotate = _selectedIds.isNotEmpty;
+          // Rotate / extract is only meaningful for a single-pallet selection.
+          final canRotate = _selectedIds.length == 1;
 
           return SafeArea(
             top: false,
@@ -413,48 +410,15 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                   child: Center(
-                    child: Wrap(
-                      alignment: WrapAlignment.center,
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: [
-                        _primaryActionButton(
-                          icon: Icons.arrow_upward,
-                          label: AppStrings.get(
-                            widget.language,
-                            'pallet_move_forward',
-                          ),
-                          enabled: canMoveForward,
-                          onTap: () => _tryMoveGroup(
-                            ctx,
-                            forward: true,
-                            onSuccess: () => setSheetState(() {}),
-                          ),
-                        ),
-                        _primaryActionButton(
-                          icon: Icons.refresh,
-                          label: AppStrings.get(
-                            widget.language,
-                            'pallet_rotate',
-                          ),
-                          enabled: canRotate,
-                          onTap: () =>
-                              _tryRotateSmart(ctx, () => setSheetState(() {})),
-                        ),
-                        _primaryActionButton(
-                          icon: Icons.arrow_downward,
-                          label: AppStrings.get(
-                            widget.language,
-                            'pallet_move_backward',
-                          ),
-                          enabled: canMoveBackward,
-                          onTap: () => _tryMoveGroup(
-                            ctx,
-                            forward: false,
-                            onSuccess: () => setSheetState(() {}),
-                          ),
-                        ),
-                      ],
+                    child: _primaryActionButton(
+                      icon: Icons.refresh,
+                      label: AppStrings.get(
+                        widget.language,
+                        'pallet_rotate',
+                      ),
+                      enabled: canRotate,
+                      onTap: () =>
+                          _tryRotateSmart(ctx, () => setSheetState(() {})),
                     ),
                   ),
                 ),
@@ -892,36 +856,85 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
             if (_selectedIds.isEmpty) return;
             _showActionMenu(outerContext);
           },
-          // ---- pan: drag-and-drop (state only — no position change yet) --------
+          // ---- pan: drag-and-drop -----------------------------------------------
           onPanStart: (details) {
             final pallet = _pendingPallet;
             _pendingPallet = null;
             if (pallet == null) return;
             setState(() {
+              _dragStartPallets = List<PlacedPallet>.from(_freePallets);
               _dragStartPosition = details.localPosition;
               _dragCurrentPosition = details.localPosition;
-              // Drag the whole selection if the hit pallet is part of it,
-              // otherwise drag only the hit pallet.
+              // Drag the whole selection when the hit pallet is already
+              // selected; otherwise drag only the hit pallet.
               _draggedPalletIds = _selectedIds.contains(pallet.id)
                   ? Set<String>.from(_selectedIds)
                   : {pallet.id};
             });
           },
           onPanUpdate: (details) {
-            if (!_isDragging) return;
-            setState(() => _dragCurrentPosition = details.localPosition);
+            if (!_isDragging || _dragStartPallets == null) return;
+            final pixelDelta = details.localPosition - _dragStartPosition!;
+            // Only the horizontal component drives the live preview.
+            // yCm is always normalised by snapDragToSlot on release;
+            // updating it during drag would let pallets clip at the
+            // trailer border and appear to "slide through the bottom".
+            final deltaCmX = pixelDelta.dx / t.scale;
+            setState(() {
+              _freePallets = ManualPalletService.applyDragDelta(
+                _dragStartPallets!,
+                _draggedPalletIds,
+                Offset(deltaCmX, 0),
+              );
+              _dragCurrentPosition = details.localPosition;
+            });
           },
           onPanEnd: (_) {
-            if (!_isDragging) return;
+            if (!_isDragging || _dragStartPallets == null) return;
+            // Left edge of the dragged group in trailer-cm at drop time.
+            // Derived from the live _freePallets that onPanUpdate has been
+            // keeping up-to-date via applyDragDelta.
+            final dropXCm = _freePallets
+                .where((p) => _draggedPalletIds.contains(p.id))
+                .fold<double>(
+                  double.infinity,
+                  (v, p) => p.xCm! < v ? p.xCm! : v,
+                );
+            final (validated, errorMsg) = ManualPalletService.snapDragToSlot(
+              _dragStartPallets!,
+              _draggedPalletIds,
+              dropXCm,
+              trailerL,
+              trailerW,
+            );
+            if (errorMsg == null) {
+              _undoHistory.add(_OverlayUndoSnapshot(
+                freePallets: List<PlacedPallet>.from(_dragStartPallets!),
+                selectedIds: Set<String>.from(_selectedIds),
+              ));
+            }
+            final snackMsg = errorMsg;
             setState(() {
+              _freePallets = validated;
+              _dragStartPallets = null;
               _dragStartPosition = null;
               _dragCurrentPosition = null;
               _draggedPalletIds = {};
             });
+            if (snackMsg != null) {
+              ScaffoldMessenger.of(outerContext).showSnackBar(
+                SnackBar(content: Text(snackMsg)),
+              );
+            }
           },
           onPanCancel: () {
             if (!_isDragging) return;
             setState(() {
+              // Roll back live positions to the state before the gesture.
+              if (_dragStartPallets != null) {
+                _freePallets = _dragStartPallets!;
+              }
+              _dragStartPallets = null;
               _dragStartPosition = null;
               _dragCurrentPosition = null;
               _draggedPalletIds = {};
@@ -978,11 +991,11 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
         children: [
           Flexible(child: hint(Icons.touch_app_outlined, 'Tippen: Markieren')),
           const SizedBox(width: 14),
-          Flexible(child: hint(Icons.select_all, 'Mehrfachauswahl')),
+          Flexible(child: hint(Icons.open_with, 'Ziehen: Verschieben')),
           const SizedBox(width: 14),
-          Flexible(child: hint(Icons.touch_app, 'Lange drücken: Aktionen')),
+          Flexible(child: hint(Icons.touch_app, 'Lang: Aktionen')),
           const SizedBox(width: 14),
-          Flexible(child: hint(Icons.refresh, 'Drehen')),
+          Flexible(child: hint(Icons.refresh, 'Drehen / Herauslösen')),
           const Spacer(),
           InkWell(
             onTap: () => _showHelpSheet(context),
@@ -1000,17 +1013,8 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
   // ---- compact selection action bar (tablet landscape) ---------------------
 
   Widget _buildCompactSelectionBar(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final range = ManualPalletService.findSelectionRange(
-      _freePallets,
-      _selectedIds,
-    );
-    final canForward = range.groupStart > 0;
-    final canBackward =
-        range.groupEnd >= 0 && range.groupEnd < range.totalSlots - 1;
-
     return Container(
-      color: scheme.surfaceContainerLow,
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Row(
         children: [
@@ -1024,28 +1028,10 @@ class _SelectableTrailerOverlayState extends State<_SelectableTrailerOverlay> {
           const SizedBox(width: 10),
           _compactSelectionButton(
             context,
-            icon: Icons.arrow_upward,
-            label: AppStrings.get(widget.language, 'pallet_move_forward'),
-            enabled: canForward,
-            onTap: () =>
-                _tryMoveGroup(context, forward: true, onSuccess: () {}),
-          ),
-          const SizedBox(width: 6),
-          _compactSelectionButton(
-            context,
             icon: Icons.refresh,
             label: AppStrings.get(widget.language, 'pallet_rotate'),
-            enabled: true,
+            enabled: _selectedIds.length == 1,
             onTap: () => _tryRotateSmart(context, () {}),
-          ),
-          const SizedBox(width: 6),
-          _compactSelectionButton(
-            context,
-            icon: Icons.arrow_downward,
-            label: AppStrings.get(widget.language, 'pallet_move_backward'),
-            enabled: canBackward,
-            onTap: () =>
-                _tryMoveGroup(context, forward: false, onSuccess: () {}),
           ),
           const Spacer(),
           _compactSelectionButton(

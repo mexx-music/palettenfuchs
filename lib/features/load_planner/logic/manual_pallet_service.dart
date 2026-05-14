@@ -292,6 +292,416 @@ class ManualPalletService {
     return null;
   }
 
+  /// Moves pallets in [movedIds] by [deltaCm] without any validation.
+  /// Used for live drag preview — positions may temporarily exceed trailer bounds.
+  static List<PlacedPallet> applyDragDelta(
+    List<PlacedPallet> pallets,
+    Set<String> movedIds,
+    Offset deltaCm,
+  ) {
+    return pallets.map((p) {
+      if (!movedIds.contains(p.id)) return p;
+      return p.copyWith(
+        xCm: p.xCm! + deltaCm.dx,
+        yCm: p.yCm! + deltaCm.dy,
+      );
+    }).toList();
+  }
+
+  /// Applies [deltaCm] to [movedIds], validates the result (bounds + overlap)
+  /// and returns the updated list.  On failure returns the original list
+  /// together with an error message so the caller can roll back and show a
+  /// SnackBar.
+  static (List<PlacedPallet>, String?) movePalletsByDelta(
+    List<PlacedPallet> pallets,
+    Set<String> movedIds,
+    Offset deltaCm,
+    double trailerLengthCm,
+    double trailerWidthCm,
+  ) {
+    final moved = applyDragDelta(pallets, movedIds, deltaCm);
+    final (valid, errorMsg) =
+        validateFreePallets(moved, trailerLengthCm, trailerWidthCm);
+    return valid ? (moved, null) : (pallets, errorMsg ?? 'Position ungültig.');
+  }
+
+  // ===========================================================================
+  // Snap-to-slot insert — called on drag end instead of free positioning
+  // ===========================================================================
+
+  /// On drag-end: removes dragged pallets from their original slot(s),
+  /// repairs the vacated source slot(s), determines the target insert index
+  /// from [dropXCm] (left edge of the dragged group in trailer-cm at drop
+  /// time), inserts the group there and repacks every slot gap-free from
+  /// x = 0.
+  ///
+  /// [pallets]    — pre-drag snapshot (_dragStartPallets)
+  /// [draggedIds] — IDs of the pallets being dragged
+  /// [dropXCm]    — leftmost xCm of the dragged group at drop time
+  ///                (determines insert ORDER only, not raw position)
+  static (List<PlacedPallet>, String?) snapDragToSlot(
+    List<PlacedPallet> pallets,
+    Set<String> draggedIds,
+    double dropXCm,
+    double trailerLengthCm,
+    double trailerWidthCm,
+  ) {
+    // --- Debug: log pre-snap state ------------------------------------------
+    for (final id in draggedIds) {
+      final p = pallets.firstWhere((p) => p.id == id,
+          orElse: () => throw StateError('snapDragToSlot: id $id not in pallets'));
+      debugPrint('[Snap] BEFORE id=$id '
+          'x=${p.xCm?.toStringAsFixed(1)} y=${p.yCm?.toStringAsFixed(1)} '
+          'w=${p.widthCm?.toStringAsFixed(1)} h=${p.heightCm?.toStringAsFixed(1)} '
+          'arr=${p.arrangement.name}');
+    }
+    debugPrint('[Snap] dropXCm=${dropXCm.toStringAsFixed(1)}');
+
+    final dragged = pallets.where((p) => draggedIds.contains(p.id)).toList();
+    if (dragged.isEmpty) return (pallets, 'Keine Palette ausgewählt.');
+
+    final nonDragged =
+        pallets.where((p) => !draggedIds.contains(p.id)).toList();
+
+    // Repair source slot(s) after removing the dragged pallets.
+    final origSlots = _groupIntoSlots(pallets);
+    final repaired = _repairAfterRemoval(nonDragged, origSlots, draggedIds);
+
+    // Prepare the dragged pallets as sub-slots ready for insertion.
+    final dragSubSlots = _buildDragSubSlots(dragged, trailerWidthCm);
+
+    // Find target index in the remaining (repaired) slots.
+    final remainSlots = _groupIntoSlots(repaired);
+    final clampedDropX = dropXCm.clamp(0.0, trailerLengthCm);
+    final targetIdx = _targetInsertIdx(remainSlots, clampedDropX);
+    debugPrint('[Snap] targetIndex=$targetIdx slotCountBefore=${remainSlots.length} '
+        'slotWidths=[${remainSlots.map((s) => _slotWidth(s).toStringAsFixed(0)).join(', ')}] '
+        'clampedDropX=${clampedDropX.toStringAsFixed(1)}');
+
+    // Merge detection: single pallet dropped onto another single pallet of the
+    // same type → combine both into a 2-pallet slot instead of inserting.
+    //   euroTransverseSingle + euroTransverseSingle → euroTransverse2 (80×120)
+    //   industrySingle       + industrySingle       → industryLongi2  (100×120)
+    final mergeSlotIdx = _findMergeSlot(remainSlots, clampedDropX);
+    final isSingleDrag = dragSubSlots.length == 1 && dragSubSlots[0].length == 1;
+    final dragArr = isSingleDrag ? dragSubSlots[0][0].arrangement : null;
+    final canMerge = isSingleDrag &&
+        mergeSlotIdx >= 0 &&
+        remainSlots[mergeSlotIdx].length == 1 &&
+        _isMergeCompatible(dragArr!, remainSlots[mergeSlotIdx][0].arrangement);
+
+    // Build the final slot order and assign gap-free xCm + canonical yCm.
+    final List<List<PlacedPallet>> newSlots;
+    if (canMerge) {
+      final existing = remainSlots[mergeSlotIdx][0];
+      final incoming = dragSubSlots[0][0];
+      final bool isEuroMerge = dragArr == RowArrangement.euroTransverseSingle;
+      final merged = [
+        existing.copyWith(
+          arrangement: isEuroMerge
+              ? RowArrangement.euroTransverse2
+              : RowArrangement.industryLongi2,
+          widthCm: isEuroMerge ? 80.0 : 100.0,
+          heightCm: 120.0,
+          yCm: 0.0,
+        ),
+        incoming.copyWith(
+          arrangement: isEuroMerge
+              ? RowArrangement.euroTransverse2
+              : RowArrangement.industryLongi2,
+          widthCm: isEuroMerge ? 80.0 : 100.0,
+          heightCm: 120.0,
+          yCm: 120.0,
+        ),
+      ];
+      newSlots = [
+        ...remainSlots.sublist(0, mergeSlotIdx),
+        merged,
+        ...remainSlots.sublist(mergeSlotIdx + 1),
+      ];
+      debugPrint('[Snap] MERGE → ${isEuroMerge ? "2er-quer" : "industryLongi2"} '
+          'at mergeSlotIdx=$mergeSlotIdx');
+    } else {
+      newSlots = [
+        ...remainSlots.sublist(0, targetIdx),
+        ...dragSubSlots,
+        ...remainSlots.sublist(targetIdx),
+      ];
+    }
+    final result = _repackExplicitSlots(newSlots);
+
+    if (result.length != pallets.length) {
+      debugPrint('[Snap] INVALID: count changed '
+          '${pallets.length} → ${result.length}');
+      return (pallets, 'Palettenanzahl hat sich verändert.');
+    }
+    final (valid, errorMsg) =
+        validateFreePallets(result, trailerLengthCm, trailerWidthCm);
+
+    if (!valid) {
+      debugPrint('[Snap] INVALID: $errorMsg');
+      return (pallets, errorMsg ?? 'Position ungültig.');
+    }
+
+    // --- Debug: log post-snap state -----------------------------------------
+    for (final id in draggedIds) {
+      final p = result.firstWhere((p) => p.id == id);
+      debugPrint('[Snap] AFTER  id=$id '
+          'x=${p.xCm?.toStringAsFixed(1)} y=${p.yCm?.toStringAsFixed(1)} '
+          'w=${p.widthCm?.toStringAsFixed(1)} h=${p.heightCm?.toStringAsFixed(1)} '
+          'arr=${p.arrangement.name} finalSlots=${_groupIntoSlots(result).length}');
+    }
+    return (result, null);
+  }
+
+  /// Repairs slot(s) that lost pallets to the drag gesture:
+  ///
+  /// • 3-pallet euro-longi loses ≥1 → remaining 2 become euro-quer 2
+  ///   (80×120, y = 0 / 120); remaining 1 becomes euro-quer 1 (80×120, y=60).
+  /// • 2-pallet euro-quer loses 1 → remaining 1 becomes euro-quer 1
+  ///   (80×120, y=60).
+  /// All other configurations are left unchanged.
+  static List<PlacedPallet> _repairAfterRemoval(
+    List<PlacedPallet> nonDragged,
+    List<List<PlacedPallet>> origSlots,
+    Set<String> draggedIds,
+  ) {
+    var result = List<PlacedPallet>.from(nonDragged);
+
+    for (final slot in origSlots) {
+      final hadDragged = slot.any((p) => draggedIds.contains(p.id));
+      if (!hadDragged) continue;
+
+      final kept = slot
+          .where((p) => !draggedIds.contains(p.id))
+          .toList()
+        ..sort((a, b) => a.yCm!.compareTo(b.yCm!));
+      if (kept.isEmpty) continue;
+
+      final was3Longi = slot.length == 3 &&
+          slot.every((p) => p.widthCm == 120.0 && p.heightCm == 80.0);
+      final was2Quer = slot.length == 2 &&
+          slot.every((p) => p.widthCm == 80.0 && p.heightCm == 120.0);
+      final was2Industry = slot.length == 2 &&
+          slot.every((p) => p.widthCm == 100.0 && p.heightCm == 120.0);
+
+      if (was3Longi && kept.length == 2) {
+        result = result.map((p) {
+          final ki = kept.indexWhere((k) => k.id == p.id);
+          if (ki < 0) return p;
+          return p.copyWith(
+            arrangement: RowArrangement.euroTransverse2,
+            widthCm: 80.0,
+            heightCm: 120.0,
+            yCm: ki == 0 ? 0.0 : 120.0,
+          );
+        }).toList();
+      } else if ((was3Longi && kept.length == 1) ||
+          (was2Quer && kept.length == 1)) {
+        result = result.map((p) {
+          if (p.id != kept[0].id) return p;
+          return p.copyWith(
+            arrangement: RowArrangement.euroTransverseSingle,
+            widthCm: 80.0,
+            heightCm: 120.0,
+            yCm: 60.0,
+          );
+        }).toList();
+      } else if (was2Industry && kept.length == 1) {
+        // Preserve the pallet's own dims (100×120 from the pair) and recentre.
+        final keptH = kept[0].heightCm!;
+        result = result.map((p) {
+          if (p.id != kept[0].id) return p;
+          return p.copyWith(
+            arrangement: RowArrangement.industrySingle,
+            yCm: (240.0 - keptH) / 2.0,
+          );
+        }).toList();
+      }
+    }
+    return result;
+  }
+
+  /// Converts the dragged pallets into ready-to-insert sub-slots:
+  ///
+  /// • Single Euro pallet → euro-quer-single (80×120, y=60, xCm=0).
+  /// • Single non-Euro pallet → original size, centred vertically, xCm=0.
+  /// • Multiple pallets → relative xCm normalised to start at 0, grouped
+  ///   into sub-slots (preserves the original slot structure).
+  static List<List<PlacedPallet>> _buildDragSubSlots(
+    List<PlacedPallet> dragged,
+    double trailerWidthCm,
+  ) {
+    if (dragged.length == 1) {
+      final p = dragged[0];
+      final isEuro = p.arrangement == RowArrangement.euroLongi3 ||
+          p.arrangement == RowArrangement.euroTransverse2 ||
+          p.arrangement == RowArrangement.euroTransverseSingle;
+      // Keep actual dims for all industry pallets (may be rotated or from a split).
+      // Only reassign arrangement to industrySingle and recentre vertically.
+      final isIndustry = p.arrangement == RowArrangement.industryLongi2 ||
+          p.arrangement == RowArrangement.industrySingle;
+      final newArr = isEuro
+          ? RowArrangement.euroTransverseSingle
+          : isIndustry
+              ? RowArrangement.industrySingle
+              : p.arrangement;
+      final newW = isEuro ? 80.0 : p.widthCm!;
+      final newH = isEuro ? 120.0 : p.heightCm!;
+      final newY = isEuro ? 60.0 : (trailerWidthCm - newH) / 2.0;
+      return [
+        [
+          p.copyWith(
+            arrangement: newArr,
+            widthCm: newW,
+            heightCm: newH,
+            yCm: newY,
+            xCm: 0.0,
+          ),
+        ],
+      ];
+    }
+
+    // Multiple pallets: shift all xCm so the leftmost starts at 0,
+    // then group into sub-slots to preserve the original slot structure.
+    final minX = dragged.fold(
+      double.infinity,
+      (v, p) => p.xCm! < v ? p.xCm! : v,
+    );
+    final normalised = dragged.map((p) => p.copyWith(xCm: p.xCm! - minX)).toList();
+    return _groupIntoSlots(normalised);
+  }
+
+  /// Returns the index in [slots] before which the dragged group should be
+  /// inserted, using slot start/end boundaries rather than midpoints alone:
+  ///
+  ///   • [dropXCm] before a slot's startX  → insert before that slot (in gap).
+  ///   • [dropXCm] within a slot (startX…endX):
+  ///       – left half  (< midX) → insert before the slot.
+  ///       – right half (≥ midX) → insert after the slot.
+  ///   • [dropXCm] past all slots → append at end.
+  static int _targetInsertIdx(
+    List<List<PlacedPallet>> slots,
+    double dropXCm,
+  ) {
+    if (slots.isEmpty) return 0;
+    for (int i = 0; i < slots.length; i++) {
+      final startX = slots[i].first.xCm!;
+      final w = _slotWidth(slots[i]);
+      final endX = startX + w;
+      final midX = startX + w / 2.0;
+      if (dropXCm < startX) return i;             // in gap before this slot
+      if (dropXCm < endX) {                       // within this slot
+        return dropXCm < midX ? i : i + 1;
+      }
+      // dropXCm >= endX → continue to next slot
+    }
+    return slots.length;
+  }
+
+  /// Returns true when [a] and [b] are considered the same "single" pallet type
+  /// for merge purposes.  Industry subtypes (industrySingle / industryLongi2)
+  /// are treated as equivalent because existing state may carry either label.
+  static bool _isMergeCompatible(RowArrangement a, RowArrangement b) {
+    if (a == RowArrangement.euroTransverseSingle) {
+      return b == RowArrangement.euroTransverseSingle;
+    }
+    final industryTypes = {
+      RowArrangement.industrySingle,
+      RowArrangement.industryLongi2,
+    };
+    return industryTypes.contains(a) && industryTypes.contains(b);
+  }
+
+  /// Returns the index of the slot whose [startX, endX) range contains
+  /// [dropXCm], or -1 when the drop lands in a gap between slots.
+  static int _findMergeSlot(List<List<PlacedPallet>> slots, double dropXCm) {
+    for (int i = 0; i < slots.length; i++) {
+      final startX = slots[i].first.xCm!;
+      final endX = startX + _slotWidth(slots[i]);
+      if (dropXCm >= startX && dropXCm < endX) return i;
+    }
+    return -1;
+  }
+
+  /// Assigns gap-free xCm values from x = 0 and canonical yCm values for
+  /// each slot.  All pallets within the same slot get the same xCm; yCm is
+  /// normalised by [_normalizeYPositions] so every pallet ends up at a clean,
+  /// arrangement-correct position.
+  static List<PlacedPallet> _repackExplicitSlots(
+    List<List<PlacedPallet>> slots,
+  ) {
+    double x = 0;
+    final result = <PlacedPallet>[];
+    for (final slot in slots) {
+      final w = _slotWidth(slot);
+      final ys = _normalizeYPositions(slot); // canonical yCm per index
+      for (int i = 0; i < slot.length; i++) {
+        result.add(slot[i].copyWith(xCm: x, yCm: ys[i]));
+      }
+      x += w;
+    }
+    return result;
+  }
+
+  /// Returns canonical yCm values for every pallet in [slot], sorted by the
+  /// pallets' original yCm order so relative vertical positioning is
+  /// preserved.
+  ///
+  /// Canonical values per arrangement:
+  ///   euroTransverseSingle (1 pallet) → [60]
+  ///   euroTransverse2      (2 pallets) → [0, 120]
+  ///   euroLongi3           (3 pallets) → [0, 80, 160]
+  ///   industryLongi2       (2 pallets) → [0, 120]
+  ///   industrySingle       (1 pallet)  → [70]
+  ///
+  /// Falls back to the pallets' current yCm if the slot's arrangement is
+  /// mixed or the count doesn't match the canonical count.
+  static List<double> _normalizeYPositions(List<PlacedPallet> slot) {
+    if (slot.isEmpty) return [];
+
+    // Sort slot indices by current yCm to determine vertical rank.
+    final byY = List.generate(slot.length, (i) => i)
+      ..sort((a, b) => slot[a].yCm!.compareTo(slot[b].yCm!));
+
+    final result = List<double>.filled(slot.length, 0.0);
+
+    // If arrangements are mixed in the slot, keep original yCm values.
+    final arr0 = slot.first.arrangement;
+    if (slot.any((p) => p.arrangement != arr0)) {
+      for (int i = 0; i < slot.length; i++) {
+        result[i] = slot[i].yCm!;
+      }
+      return result;
+    }
+
+    final canonical = switch (arr0) {
+      RowArrangement.euroTransverseSingle => [60.0],
+      RowArrangement.euroTransverse2 => [0.0, 120.0],
+      RowArrangement.euroLongi3 => [0.0, 80.0, 160.0],
+      RowArrangement.industryLongi2 => [0.0, 120.0],
+      // Centre dynamically: works for canonical 120×100 (→ 70) and
+      // rotated 100×120 (→ 60) without hardcoding a single value.
+      RowArrangement.industrySingle => [
+          (240.0 - slot.first.heightCm!) / 2.0
+        ],
+    };
+
+    if (canonical.length != slot.length) {
+      // Count/arrangement mismatch — keep original yCm.
+      for (int i = 0; i < slot.length; i++) {
+        result[i] = slot[i].yCm!;
+      }
+      return result;
+    }
+
+    // Assign canonical value at each yCm-rank position.
+    for (int rank = 0; rank < byY.length; rank++) {
+      result[byY[rank]] = canonical[rank];
+    }
+    return result;
+  }
+
   /// Rotates a free-mode pallet by swapping widthCm ↔ heightCm.
   static PlacedPallet rotateFreePallet(PlacedPallet pallet) {
     return pallet.copyWith(
@@ -572,8 +982,15 @@ class ManualPalletService {
           pallets, selPallet, slotPallets, trailerLengthCm, trailerWidthCm);
     }
 
-    // Case B: simple dimension swap.
-    final rotated = rotateFreePallet(selPallet);
+    // Case B: simple dimension swap + vertical recentre.
+    var rotated = rotateFreePallet(selPallet);
+    // After swapping dimensions the pallet must be recentred so it stays in the
+    // middle of the trailer width (new height may differ from old height).
+    if (selPallet.arrangement == RowArrangement.industrySingle) {
+      rotated = rotated.copyWith(
+        yCm: (trailerWidthCm - rotated.heightCm!) / 2.0,
+      );
+    }
     final updated =
         pallets.map((p) => p.id == selId ? rotated : p).toList();
     final (valid, errorMsg) =

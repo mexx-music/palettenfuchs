@@ -115,9 +115,13 @@ class FreeModePainter extends CustomPainter {
         ..strokeWidth = 0.5,
     );
 
-    for (final pallet in pallets) {
-      if (!pallet.isFreeMode) continue;
+    // Draw non-dragged pallets first, then dragged on top (correct z-order).
+    final drawOrder = [
+      ...pallets.where((p) => p.isFreeMode && !draggedPalletIds.contains(p.id)),
+      ...pallets.where((p) => p.isFreeMode && draggedPalletIds.contains(p.id)),
+    ];
 
+    for (final pallet in drawOrder) {
       final rect = Rect.fromLTWH(
         originX + pallet.xCm! * sx,
         originY + pallet.yCm! * sy,
