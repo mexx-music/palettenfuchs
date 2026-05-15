@@ -102,9 +102,10 @@ class TrailerPainter extends CustomPainter {
     double scaleY,
   ) {
     final color = _colorFor(row.arrangement);
-    final isEuro = row.arrangement == RowArrangement.euroLongi3 ||
+    final isEuroRow = row.arrangement == RowArrangement.euroLongi3 ||
         row.arrangement == RowArrangement.euroTransverse2 ||
         row.arrangement == RowArrangement.euroTransverseSingle;
+    final isMixed = row.arrangement == RowArrangement.mixedEuro2Industry1;
 
     int palletIdx = 0;
     for (final p in _palletsFor(row.arrangement, xCm)) {
@@ -118,9 +119,17 @@ class TrailerPainter extends CustomPainter {
       final palletId = '${rowIdx}_$palletIdx';
       final isSelected = selectedPalletIds.contains(palletId);
 
+      // For mixedEuro2Industry1: pallet 0 = Industrie, pallets 1+2 = Euro.
+      final palletColor = isMixed
+          ? (palletIdx == 0
+              ? _colorFor(RowArrangement.industryLongi2)
+              : _colorFor(RowArrangement.euroTransverse2))
+          : color;
+      final isEuroPallet = isEuroRow || (isMixed && palletIdx > 0);
+
       canvas.drawRect(rect,
           Paint()
-            ..color = color
+            ..color = palletColor
             ..style = PaintingStyle.fill);
       canvas.drawRect(
           rect,
@@ -147,7 +156,7 @@ class TrailerPainter extends CustomPainter {
         );
       }
 
-      if (isEuro) _drawEpalStamp(canvas, rect);
+      if (isEuroPallet) _drawEpalStamp(canvas, rect);
       palletIdx++;
     }
   }
@@ -256,6 +265,12 @@ class TrailerPainter extends CustomPainter {
         ];
       case RowArrangement.industrySingle:
         return [[xCm, 70, 120, 100]];
+      case RowArrangement.mixedEuro2Industry1:
+        return [
+          [xCm, 0, 100, 120],
+          [xCm, 120, 80, 120],
+          [xCm + 80, 120, 80, 120],
+        ];
     }
   }
 
@@ -271,6 +286,8 @@ class TrailerPainter extends CustomPainter {
         return Colors.orange[400]!;
       case RowArrangement.industrySingle:
         return Colors.orange[300]!;
+      case RowArrangement.mixedEuro2Industry1:
+        return Colors.blue[400]!; // overridden per-pallet in _drawRow
     }
   }
 

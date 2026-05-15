@@ -23,6 +23,21 @@ class PalletLayoutEngine {
     final safeIndustry = industryPallets.clamp(0, maxIndustryPallets);
     final trailerLengthCm = trailerType.trailerLengthCm;
 
+    // Targeted special case: 29 Euro + 3 Industrie in einem Frigo.
+    // Standard-Sequenz braucht 1380 cm (9× longi3 + 2er-quer + industryLongi2
+    // + industrySingle), passt nicht in 1340 cm. Mit der Mixed-Zone bleibt
+    // genau ein Slot von 160 cm, der 1 Industrie + 2 Euro kombiniert →
+    // Gesamt 1340 cm, alle Paletten platziert.
+    if (trailerType == TrailerType.frigo &&
+        euroToPlace == 29 &&
+        safeIndustry == 3) {
+      return _buildFrigo29Euro3IndustryPlan(
+        safeEuro: safeEuro,
+        safeIndustry: safeIndustry,
+        trailerType: trailerType,
+      );
+    }
+
     final rows = <LoadRow>[];
     double usedLength = 0;
 
@@ -85,6 +100,50 @@ class PalletLayoutEngine {
       requestedIndustryPallets: safeIndustry,
       placedEuroPallets: placedEuro,
       placedIndustryPallets: placedIndustry,
+      trailerType: trailerType,
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Frigo-Sonderfall 29 Euro + 3 Industrie
+  // ---------------------------------------------------------------------------
+
+  /// Hand-crafted plan for the Frigo 29 Euro + 3 Industrie corner case.
+  /// Sequence: 9× euroLongi3 (1080 cm) + 1× mixedEuro2Industry1 (160 cm)
+  /// + 1× industryLongi2 (100 cm) = 1340 cm = Frigo-Innenlänge.
+  static LoadPlan _buildFrigo29Euro3IndustryPlan({
+    required int safeEuro,
+    required int safeIndustry,
+    required TrailerType trailerType,
+  }) {
+    final rows = <LoadRow>[];
+    for (int i = 0; i < 9; i++) {
+      rows.add(LoadRow(
+        index: rows.length,
+        arrangement: RowArrangement.euroLongi3,
+        palletCount: 3,
+        weight: 0,
+      ));
+    }
+    rows.add(LoadRow(
+      index: rows.length,
+      arrangement: RowArrangement.mixedEuro2Industry1,
+      palletCount: 3,
+      weight: 0,
+    ));
+    rows.add(LoadRow(
+      index: rows.length,
+      arrangement: RowArrangement.industryLongi2,
+      palletCount: 2,
+      weight: 0,
+    ));
+
+    return LoadPlan(
+      rows: rows,
+      requestedEuroPallets: safeEuro,
+      requestedIndustryPallets: safeIndustry,
+      placedEuroPallets: 29,
+      placedIndustryPallets: 3,
       trailerType: trailerType,
     );
   }

@@ -19,18 +19,28 @@ class WeightPanel extends StatelessWidget {
     required this.language,
   });
 
-  int get _euroCount => loadPlan.rows
-      .where((r) =>
-          r.arrangement == RowArrangement.euroLongi3 ||
-          r.arrangement == RowArrangement.euroTransverse2 ||
-          r.arrangement == RowArrangement.euroTransverseSingle)
-      .fold(0, (s, r) => s + r.palletCount);
+  int get _euroCount => loadPlan.rows.fold(0, (s, r) {
+        if (r.arrangement == RowArrangement.euroLongi3 ||
+            r.arrangement == RowArrangement.euroTransverse2 ||
+            r.arrangement == RowArrangement.euroTransverseSingle) {
+          return s + r.palletCount;
+        }
+        if (r.arrangement == RowArrangement.mixedEuro2Industry1) {
+          return s + 2; // 2 Euro + 1 Industrie per mixed zone
+        }
+        return s;
+      });
 
-  int get _industryCount => loadPlan.rows
-      .where((r) =>
-          r.arrangement == RowArrangement.industryLongi2 ||
-          r.arrangement == RowArrangement.industrySingle)
-      .fold(0, (s, r) => s + r.palletCount);
+  int get _industryCount => loadPlan.rows.fold(0, (s, r) {
+        if (r.arrangement == RowArrangement.industryLongi2 ||
+            r.arrangement == RowArrangement.industrySingle) {
+          return s + r.palletCount;
+        }
+        if (r.arrangement == RowArrangement.mixedEuro2Industry1) {
+          return s + 1;
+        }
+        return s;
+      });
 
   @override
   Widget build(BuildContext context) {

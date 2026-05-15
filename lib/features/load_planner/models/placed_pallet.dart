@@ -60,6 +60,12 @@ class PlacedPallet {
         ];
       case RowArrangement.industrySingle:
         return [[xCm, 70, 120, 100]];
+      case RowArrangement.mixedEuro2Industry1:
+        return [
+          [xCm, 0, 100, 120],
+          [xCm, 120, 80, 120],
+          [xCm + 80, 120, 80, 120],
+        ];
     }
   }
 

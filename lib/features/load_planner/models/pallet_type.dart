@@ -16,7 +16,8 @@ enum RowArrangement {
   euroTransverse2('Euro quer (2er)', 2, 80), // 2 Paletten à 120cm = 240cm Breite
   euroTransverseSingle('Euro quer (einzeln)', 1, 80), // 1 Palette à 120cm
   industryLongi2('Industrie quer (2er)', 2, 100), // 2 Paletten à 120cm = 240cm Breite, 100cm in Fahrtrichtung
-  industrySingle('Industrie (einzeln)', 1, 120); // 1 Palette à 120cm
+  industrySingle('Industrie (einzeln)', 1, 120), // 1 Palette à 120cm
+  mixedEuro2Industry1('Gemischt (2 Euro + 1 Industrie)', 3, 160); // 1 Industrie quer + 2 Euro quer hintereinander
 
   final String label;
   final int palletCount; // Anzahl Paletten nebeneinander

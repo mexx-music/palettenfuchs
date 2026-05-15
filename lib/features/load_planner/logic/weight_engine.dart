@@ -67,6 +67,19 @@ class WeightEngine {
     double usedCm = 0;
 
     for (final row in loadPlan.rows) {
+      if (row.arrangement == RowArrangement.mixedEuro2Industry1) {
+        // Mixed zone (160 cm): 1 industrie quer (center @ usedCm + 50)
+        // + 2 euro quer stacked along length (centers @ usedCm + 40 / +120).
+        final indW = kgPerIndustry.toDouble();
+        final euroW = kgPerEuro.toDouble();
+        rearLoad += indW * (usedCm + 50) / trailerLength;
+        rearLoad += euroW * (usedCm + 40) / trailerLength;
+        rearLoad += euroW * (usedCm + 120) / trailerLength;
+        totalWeight += indW + 2 * euroW;
+        usedCm += row.lengthCm;
+        continue;
+      }
+
       final isEuro = row.arrangement == RowArrangement.euroLongi3 ||
           row.arrangement == RowArrangement.euroTransverse2 ||
           row.arrangement == RowArrangement.euroTransverseSingle;
@@ -92,9 +105,17 @@ class WeightEngine {
 
     for (final p in pallets) {
       if (!p.isFreeMode) continue;
-      final isEuro = p.arrangement == RowArrangement.euroLongi3 ||
-          p.arrangement == RowArrangement.euroTransverse2 ||
-          p.arrangement == RowArrangement.euroTransverseSingle;
+      final isEuroByArrangement =
+          p.arrangement == RowArrangement.euroLongi3 ||
+              p.arrangement == RowArrangement.euroTransverse2 ||
+              p.arrangement == RowArrangement.euroTransverseSingle;
+      // Mixed zone shares one arrangement across both pallet types;
+      // distinguish by footprint (100×120 = industrie, 80×120 = euro).
+      final isMixedEuro =
+          p.arrangement == RowArrangement.mixedEuro2Industry1 &&
+              p.widthCm == 80.0 &&
+              p.heightCm == 120.0;
+      final isEuro = isEuroByArrangement || isMixedEuro;
       final w = (isEuro ? kgPerEuro : kgPerIndustry).toDouble();
       final centerX = p.xCm! + p.widthCm! / 2;
       rearLoad += w * centerX / trailerLengthCm;

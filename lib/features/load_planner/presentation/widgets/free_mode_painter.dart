@@ -129,7 +129,14 @@ class FreeModePainter extends CustomPainter {
         pallet.heightCm! * sy,
       );
 
-      final color = _colorFor(pallet.arrangement);
+      // For the mixed zone the arrangement is shared by 1 industrie + 2 euro
+      // pallets; pick colour from the actual footprint instead.
+      final color =
+          pallet.arrangement == RowArrangement.mixedEuro2Industry1
+              ? (pallet.widthCm == 100.0
+                  ? _colorFor(RowArrangement.industryLongi2)
+                  : _colorFor(RowArrangement.euroTransverse2))
+              : _colorFor(pallet.arrangement);
       final isDragged = draggedPalletIds.contains(pallet.id);
       canvas.drawRect(
           rect,
@@ -161,7 +168,11 @@ class FreeModePainter extends CustomPainter {
 
       final isEuro = pallet.arrangement == RowArrangement.euroLongi3 ||
           pallet.arrangement == RowArrangement.euroTransverse2 ||
-          pallet.arrangement == RowArrangement.euroTransverseSingle;
+          pallet.arrangement == RowArrangement.euroTransverseSingle ||
+          // Mixed-zone Euro pallets carry the 80×120 footprint.
+          (pallet.arrangement == RowArrangement.mixedEuro2Industry1 &&
+              pallet.widthCm == 80.0 &&
+              pallet.heightCm == 120.0);
       if (isEuro) _drawEpalStamp(canvas, rect);
     }
 
@@ -273,6 +284,9 @@ class FreeModePainter extends CustomPainter {
         return Colors.orange[400]!;
       case RowArrangement.industrySingle:
         return Colors.orange[300]!;
+      case RowArrangement.mixedEuro2Industry1:
+        // Mixed-zone fallback colour; per-pallet shading uses footprint above.
+        return Colors.blue[400]!;
     }
   }
 
