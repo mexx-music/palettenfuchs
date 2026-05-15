@@ -23,15 +23,27 @@ class PalletLayoutEngine {
     final safeIndustry = industryPallets.clamp(0, maxIndustryPallets);
     final trailerLengthCm = trailerType.trailerLengthCm;
 
-    // Targeted special case: 29 Euro + 3 Industrie in einem Frigo.
-    // Standard-Sequenz braucht 1380 cm (9× longi3 + 2er-quer + industryLongi2
-    // + industrySingle), passt nicht in 1340 cm. Mit der Mixed-Zone bleibt
-    // genau ein Slot von 160 cm, der 1 Industrie + 2 Euro kombiniert →
-    // Gesamt 1340 cm, alle Paletten platziert.
-    if (trailerType == TrailerType.frigo &&
-        euroToPlace == 29 &&
-        safeIndustry == 3) {
-      return _buildFrigo29Euro3IndustryPlan(
+    // Targeted special case: 29 Euro + 3 Industrie (reales Hecklayout).
+    // Sequenz von vorn nach hinten: 8× longi3 (960) + 2× euroTransverse2 (160)
+    // + 1× industryLongi2 (100) + 1× mixedEuro1Industry1Tail (100) = 1320 cm.
+    // Passt in Standard (1360) und Frigo (1340). Heck-Mischzone hält Euro
+    // links (80 cm tief, 20 cm Luft hinten) und Industrie rechts (100 cm bis
+    // Türkante) auf gleicher Vorderkante.
+    if (euroToPlace == 29 && safeIndustry == 3) {
+      return _build29Euro3IndustryPlan(
+        safeEuro: safeEuro,
+        safeIndustry: safeIndustry,
+        trailerType: trailerType,
+      );
+    }
+
+    // Targeted special case: 28 Euro + 4 Industrie (Praxis-Hecklayout).
+    // Sequenz von vorn nach hinten: 8× longi3 (960) + 2× industryLongi2 (200)
+    // + 2× euroTransverse2 (160) = 1320 cm. Passt in Standard (1360 cm) und
+    // Frigo (1340 cm). Hinten zwei 2er-Euro-quer-Reihen, davor zwei
+    // Industrie-Doppelreihen, vorne die 3er-Längs-Reihen.
+    if (euroToPlace == 28 && safeIndustry == 4) {
+      return _build28Euro4IndustryPlan(
         safeEuro: safeEuro,
         safeIndustry: safeIndustry,
         trailerType: trailerType,
@@ -108,16 +120,20 @@ class PalletLayoutEngine {
   // Frigo-Sonderfall 29 Euro + 3 Industrie
   // ---------------------------------------------------------------------------
 
-  /// Hand-crafted plan for the Frigo 29 Euro + 3 Industrie corner case.
-  /// Sequence: 9× euroLongi3 (1080 cm) + 1× mixedEuro2Industry1 (160 cm)
-  /// + 1× industryLongi2 (100 cm) = 1340 cm = Frigo-Innenlänge.
-  static LoadPlan _buildFrigo29Euro3IndustryPlan({
+  /// Hand-crafted plan for 29 Euro + 3 Industrie (real Frigo-Hecklayout).
+  /// Engine row order (front → rear):
+  ///   8× euroLongi3                  (960 cm, 24 Euro)
+  ///   2× euroTransverse2             (160 cm,  4 Euro)
+  ///   1× industryLongi2              (100 cm,  2 Industrie)
+  ///   1× mixedEuro1Industry1Tail     (100 cm,  1 Euro + 1 Industrie)
+  ///   = 1320 cm. Passt in Standard (1360 cm) und Frigo (1340 cm).
+  static LoadPlan _build29Euro3IndustryPlan({
     required int safeEuro,
     required int safeIndustry,
     required TrailerType trailerType,
   }) {
     final rows = <LoadRow>[];
-    for (int i = 0; i < 9; i++) {
+    for (int i = 0; i < 8; i++) {
       rows.add(LoadRow(
         index: rows.length,
         arrangement: RowArrangement.euroLongi3,
@@ -125,15 +141,23 @@ class PalletLayoutEngine {
         weight: 0,
       ));
     }
+    for (int i = 0; i < 2; i++) {
+      rows.add(LoadRow(
+        index: rows.length,
+        arrangement: RowArrangement.euroTransverse2,
+        palletCount: 2,
+        weight: 0,
+      ));
+    }
     rows.add(LoadRow(
       index: rows.length,
-      arrangement: RowArrangement.mixedEuro2Industry1,
-      palletCount: 3,
+      arrangement: RowArrangement.industryLongi2,
+      palletCount: 2,
       weight: 0,
     ));
     rows.add(LoadRow(
       index: rows.length,
-      arrangement: RowArrangement.industryLongi2,
+      arrangement: RowArrangement.mixedEuro1Industry1Tail,
       palletCount: 2,
       weight: 0,
     ));
@@ -144,6 +168,53 @@ class PalletLayoutEngine {
       requestedIndustryPallets: safeIndustry,
       placedEuroPallets: 29,
       placedIndustryPallets: 3,
+      trailerType: trailerType,
+    );
+  }
+
+  /// Hand-crafted plan for 28 Euro + 4 Industrie (real Frigo-Hecklayout).
+  /// Engine row order (front → rear):
+  ///   8× euroLongi3      (960 cm, 24 Euro – front)
+  ///   2× industryLongi2  (200 cm, 4 Industrie – middle)
+  ///   2× euroTransverse2 (160 cm, 4 Euro – rear)
+  ///   = 1320 cm gesamt. Passt in Standard (1360 cm) und Frigo (1340 cm).
+  static LoadPlan _build28Euro4IndustryPlan({
+    required int safeEuro,
+    required int safeIndustry,
+    required TrailerType trailerType,
+  }) {
+    final rows = <LoadRow>[];
+    for (int i = 0; i < 8; i++) {
+      rows.add(LoadRow(
+        index: rows.length,
+        arrangement: RowArrangement.euroLongi3,
+        palletCount: 3,
+        weight: 0,
+      ));
+    }
+    for (int i = 0; i < 2; i++) {
+      rows.add(LoadRow(
+        index: rows.length,
+        arrangement: RowArrangement.industryLongi2,
+        palletCount: 2,
+        weight: 0,
+      ));
+    }
+    for (int i = 0; i < 2; i++) {
+      rows.add(LoadRow(
+        index: rows.length,
+        arrangement: RowArrangement.euroTransverse2,
+        palletCount: 2,
+        weight: 0,
+      ));
+    }
+
+    return LoadPlan(
+      rows: rows,
+      requestedEuroPallets: safeEuro,
+      requestedIndustryPallets: safeIndustry,
+      placedEuroPallets: 28,
+      placedIndustryPallets: 4,
       trailerType: trailerType,
     );
   }

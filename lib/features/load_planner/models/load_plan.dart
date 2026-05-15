@@ -17,6 +17,12 @@ class LoadPlan {
   /// When non-null, the trailer small view renders these instead of [rows].
   final List<PlacedPallet>? manualPallets;
 
+  /// Praktische Toleranz: kleine Überlänge wird durch die Heck-/Türkante
+  /// abgefangen (z. B. Frigo 28E+4I = 1360 cm bei 1340 cm Innenlänge).
+  /// Wenn true, gilt der Plan trotz [usedLengthCm] > [trailerMaxLengthCm]
+  /// als passend ([isOverLimit] = false).
+  final bool acceptsTailDoorOverhang;
+
   const LoadPlan({
     required this.rows,
     this.requestedEuroPallets = 0,
@@ -27,6 +33,7 @@ class LoadPlan {
     this.hasManualSeedWarning = false,
     this.manualSeedWarningText = '',
     this.manualPallets,
+    this.acceptsTailDoorOverhang = false,
   });
 
   double get trailerMaxLengthCm => trailerType.trailerLengthCm;
@@ -59,7 +66,10 @@ class LoadPlan {
       (trailerMaxLengthCm - usedLengthCm).clamp(0, double.infinity);
 
   /// Überschreitet den Ladeplan das Längenlimit?
-  bool get isOverLimit => usedLengthCm > trailerMaxLengthCm;
+  /// Eine kleine, durch [acceptsTailDoorOverhang] explizit akzeptierte
+  /// Überlänge gilt als praxisgültig und löst keine Überladungs-Warnung aus.
+  bool get isOverLimit =>
+      !acceptsTailDoorOverhang && usedLengthCm > trailerMaxLengthCm;
 
   /// [clearManualPallets] = true explicitly sets manualPallets to null
   /// (needed because null in [manualPallets] would otherwise mean "keep current").
@@ -74,6 +84,7 @@ class LoadPlan {
     String? manualSeedWarningText,
     List<PlacedPallet>? manualPallets,
     bool clearManualPallets = false,
+    bool? acceptsTailDoorOverhang,
   }) {
     return LoadPlan(
       rows: rows ?? this.rows,
@@ -91,6 +102,8 @@ class LoadPlan {
           manualSeedWarningText ?? this.manualSeedWarningText,
       manualPallets:
           clearManualPallets ? null : (manualPallets ?? this.manualPallets),
+      acceptsTailDoorOverhang:
+          acceptsTailDoorOverhang ?? this.acceptsTailDoorOverhang,
     );
   }
 

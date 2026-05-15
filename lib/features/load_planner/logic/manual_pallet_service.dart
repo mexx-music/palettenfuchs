@@ -253,6 +253,11 @@ class ManualPalletService {
           [xCm, 120, 80, 120],
           [xCm + 80, 120, 80, 120],
         ];
+      case RowArrangement.mixedEuro1Industry1Tail:
+        return [
+          [xCm, 0, 80, 120],
+          [xCm, 120, 100, 120],
+        ];
     }
   }
 
@@ -694,6 +699,9 @@ class ManualPalletService {
       // Mixed zone splits across two x-slots (industry+euro at x, second euro
       // at x+80); no single canonical Y vector applies — keep original yCm.
       RowArrangement.mixedEuro2Industry1 => <double>[],
+      // Tail mix: 1 Euro + 1 Industrie share the front edge but have different
+      // depths/widths — keep original yCm rather than forcing a canonical Y.
+      RowArrangement.mixedEuro1Industry1Tail => <double>[],
     };
 
     if (canonical.length != slot.length) {

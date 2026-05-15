@@ -28,6 +28,9 @@ class WeightPanel extends StatelessWidget {
         if (r.arrangement == RowArrangement.mixedEuro2Industry1) {
           return s + 2; // 2 Euro + 1 Industrie per mixed zone
         }
+        if (r.arrangement == RowArrangement.mixedEuro1Industry1Tail) {
+          return s + 1; // 1 Euro + 1 Industrie in der Heck-Mischzone
+        }
         return s;
       });
 
@@ -37,6 +40,9 @@ class WeightPanel extends StatelessWidget {
           return s + r.palletCount;
         }
         if (r.arrangement == RowArrangement.mixedEuro2Industry1) {
+          return s + 1;
+        }
+        if (r.arrangement == RowArrangement.mixedEuro1Industry1Tail) {
           return s + 1;
         }
         return s;

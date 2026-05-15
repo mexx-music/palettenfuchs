@@ -66,6 +66,13 @@ class PlacedPallet {
           [xCm, 120, 80, 120],
           [xCm + 80, 120, 80, 120],
         ];
+      case RowArrangement.mixedEuro1Industry1Tail:
+        // Front edges aligned at xCm. Euro (80 cm) leaves 20 cm Luft hinten;
+        // Industrie (100 cm) reicht bis zur Heckkante / Türkante.
+        return [
+          [xCm, 0, 80, 120],
+          [xCm, 120, 100, 120],
+        ];
     }
   }
 
