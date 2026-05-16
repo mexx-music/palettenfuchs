@@ -9,7 +9,7 @@ class PalletLayoutEngine {
   static const int maxEuroPallets = 34;
   static const int maxIndustryPallets = 26;
 
-/// Berechnet einen Ladeplan basierend auf Euro- und Industrie-Paletten.
+  /// Berechnet einen Ladeplan basierend auf Euro- und Industrie-Paletten.
   /// [kgPerEuro] > 0 aktiviert die gewichtsbasierte Achslast-Optimierung.
   static LoadPlan calculateBasicPlan({
     required int euroPallets,
@@ -65,16 +65,24 @@ class PalletLayoutEngine {
         );
         if (seq != null) {
           for (final arr in seq) {
-            rows.add(LoadRow(
+            rows.add(
+              LoadRow(
                 index: rows.length,
                 arrangement: arr,
                 palletCount: arr.palletCount,
-                weight: 0));
+                weight: 0,
+              ),
+            );
             usedLength += arr.lengthCm;
           }
         } else {
           usedLength = _addEuroPallets(
-              rows, euroToPlace, rows.length, usedLength, trailerLengthCm);
+            rows,
+            euroToPlace,
+            rows.length,
+            usedLength,
+            trailerLengthCm,
+          );
         }
       } else {
         // Kein Gewicht: geometrische Näherung (bestehende Logik)
@@ -87,21 +95,36 @@ class PalletLayoutEngine {
         );
         if (euroResult['fallback'] == true) {
           usedLength = _addEuroPallets(
-              rows, euroToPlace, rows.length, usedLength, trailerLengthCm);
+            rows,
+            euroToPlace,
+            rows.length,
+            usedLength,
+            trailerLengthCm,
+          );
         } else {
           usedLength = euroResult['usedLength'] as double;
         }
       }
     } else {
       usedLength = _addEuroPallets(
-          rows, euroToPlace, rows.length, usedLength, trailerLengthCm);
+        rows,
+        euroToPlace,
+        rows.length,
+        usedLength,
+        trailerLengthCm,
+      );
     }
 
     final placedEuro = rows.fold(0, (s, r) => s + r.palletCount);
 
     // 2. Industrie-Paletten verarbeiten
     usedLength = _addIndustryPallets(
-        rows, safeIndustry, rows.length, usedLength, trailerLengthCm);
+      rows,
+      safeIndustry,
+      rows.length,
+      usedLength,
+      trailerLengthCm,
+    );
 
     final placedIndustry =
         rows.fold(0, (s, r) => s + r.palletCount) - placedEuro;
@@ -134,33 +157,41 @@ class PalletLayoutEngine {
   }) {
     final rows = <LoadRow>[];
     for (int i = 0; i < 8; i++) {
-      rows.add(LoadRow(
-        index: rows.length,
-        arrangement: RowArrangement.euroLongi3,
-        palletCount: 3,
-        weight: 0,
-      ));
+      rows.add(
+        LoadRow(
+          index: rows.length,
+          arrangement: RowArrangement.euroLongi3,
+          palletCount: 3,
+          weight: 0,
+        ),
+      );
     }
     for (int i = 0; i < 2; i++) {
-      rows.add(LoadRow(
+      rows.add(
+        LoadRow(
+          index: rows.length,
+          arrangement: RowArrangement.euroTransverse2,
+          palletCount: 2,
+          weight: 0,
+        ),
+      );
+    }
+    rows.add(
+      LoadRow(
         index: rows.length,
-        arrangement: RowArrangement.euroTransverse2,
+        arrangement: RowArrangement.industryLongi2,
         palletCount: 2,
         weight: 0,
-      ));
-    }
-    rows.add(LoadRow(
-      index: rows.length,
-      arrangement: RowArrangement.industryLongi2,
-      palletCount: 2,
-      weight: 0,
-    ));
-    rows.add(LoadRow(
-      index: rows.length,
-      arrangement: RowArrangement.mixedEuro1Industry1Tail,
-      palletCount: 2,
-      weight: 0,
-    ));
+      ),
+    );
+    rows.add(
+      LoadRow(
+        index: rows.length,
+        arrangement: RowArrangement.mixedEuro1Industry1Tail,
+        palletCount: 2,
+        weight: 0,
+      ),
+    );
 
     return LoadPlan(
       rows: rows,
@@ -185,28 +216,34 @@ class PalletLayoutEngine {
   }) {
     final rows = <LoadRow>[];
     for (int i = 0; i < 8; i++) {
-      rows.add(LoadRow(
-        index: rows.length,
-        arrangement: RowArrangement.euroLongi3,
-        palletCount: 3,
-        weight: 0,
-      ));
+      rows.add(
+        LoadRow(
+          index: rows.length,
+          arrangement: RowArrangement.euroLongi3,
+          palletCount: 3,
+          weight: 0,
+        ),
+      );
     }
     for (int i = 0; i < 2; i++) {
-      rows.add(LoadRow(
-        index: rows.length,
-        arrangement: RowArrangement.industryLongi2,
-        palletCount: 2,
-        weight: 0,
-      ));
+      rows.add(
+        LoadRow(
+          index: rows.length,
+          arrangement: RowArrangement.industryLongi2,
+          palletCount: 2,
+          weight: 0,
+        ),
+      );
     }
     for (int i = 0; i < 2; i++) {
-      rows.add(LoadRow(
-        index: rows.length,
-        arrangement: RowArrangement.euroTransverse2,
-        palletCount: 2,
-        weight: 0,
-      ));
+      rows.add(
+        LoadRow(
+          index: rows.length,
+          arrangement: RowArrangement.euroTransverse2,
+          palletCount: 2,
+          weight: 0,
+        ),
+      );
     }
 
     return LoadPlan(
@@ -244,13 +281,17 @@ class PalletLayoutEngine {
       if (remaining <= 0) continue;
 
       for (final split in _splitEuroVariants(remaining)) {
-        final rowLen = split.n3 * TrailerConstants.euroLengthCm +
+        final rowLen =
+            split.n3 * TrailerConstants.euroLengthCm +
             (split.n2 + n1) * TrailerConstants.euroWidthCm;
         if (startOffsetCm + rowLen > trailerLengthCm) continue;
 
         for (final seq in _generateEuroSequences(
-            n1: n1, n2: split.n2, n3: split.n3,
-            maxGroupSize: maxGroupSize)) {
+          n1: n1,
+          n2: split.n2,
+          n3: split.n3,
+          maxGroupSize: maxGroupSize,
+        )) {
           if (!_isValidHeavySequence(seq, kgPerEuro)) continue;
           final score = _scoreEuroSequence(
             seq: seq,
@@ -307,7 +348,8 @@ class PalletLayoutEngine {
     final patternParts = <String>[];
 
     for (final row in seq) {
-      rearLoad += row.palletCount *
+      rearLoad +=
+          row.palletCount *
           kgPerEuro *
           (pos + row.lengthCm / 2) /
           trailerType.trailerLengthCm;
@@ -373,8 +415,7 @@ class PalletLayoutEngine {
   /// Nach einer Einzelreihe (1er) darf nie direkt eine 3er-Längsreihe folgen —
   /// es muss zuerst eine 2er-Querreihe kommen.
   /// Verletzende Kandidaten werden verworfen, nicht nur bestraft.
-  static bool _isValidHeavySequence(
-      List<RowArrangement> seq, int kgPerEuro) {
+  static bool _isValidHeavySequence(List<RowArrangement> seq, int kgPerEuro) {
     if (kgPerEuro < 900) return true;
     for (int i = 0; i < seq.length - 1; i++) {
       if (seq[i] == RowArrangement.euroTransverseSingle &&
@@ -448,8 +489,11 @@ class PalletLayoutEngine {
   }
 
   static void _enumGroupings(
-      int remaining, List<int> current, List<List<int>> result,
-      {int maxGroupSize = 2}) {
+    int remaining,
+    List<int> current,
+    List<List<int>> result, {
+    int maxGroupSize = 2,
+  }) {
     if (remaining == 0) {
       result.add(List.of(current));
       return;
@@ -457,7 +501,12 @@ class PalletLayoutEngine {
     for (int g = maxGroupSize; g >= 1; g--) {
       if (remaining >= g) {
         current.add(g);
-        _enumGroupings(remaining - g, current, result, maxGroupSize: maxGroupSize);
+        _enumGroupings(
+          remaining - g,
+          current,
+          result,
+          maxGroupSize: maxGroupSize,
+        );
         current.removeLast();
       }
     }
@@ -465,7 +514,10 @@ class PalletLayoutEngine {
 
   /// Abwechselnder Pool aus 2er- und 3er-Reihen.
   static List<RowArrangement> _buildAlternatingPool(
-      int n2, int n3, {required bool start2er}) {
+    int n2,
+    int n3, {
+    required bool start2er,
+  }) {
     final pool = <RowArrangement>[];
     int rem2 = n2, rem3 = n3;
     bool use2er = start2er;
@@ -561,7 +613,8 @@ class PalletLayoutEngine {
     RowArrangement? prev;
 
     for (final arr in seq) {
-      rearLoad += arr.palletCount *
+      rearLoad +=
+          arr.palletCount *
           kgPerEuro *
           (pos + arr.lengthCm / 2) /
           trailerLengthCm;
@@ -597,38 +650,83 @@ class PalletLayoutEngine {
     int rowIndex = startIndex;
     int remaining = totalPallets;
 
+    // Special case: if totalPallets % 3 == 1 and >= 4,
+    // use two transverse2 pairs to avoid trailing single pallet
+    if (remaining % 3 == 1 && remaining >= 4) {
+      // First add as many euroLongi3 (3er) as possible from the remainder
+      final longiCount = (remaining - 4) ~/ 3;
+      for (int i = 0; i < longiCount; i++) {
+        if (usedLength + TrailerConstants.euroLengthCm <= trailerLengthCm) {
+          rows.add(
+            LoadRow(
+              index: rowIndex++,
+              arrangement: RowArrangement.euroLongi3,
+              palletCount: 3,
+              weight: 0,
+            ),
+          );
+          usedLength += TrailerConstants.euroLengthCm;
+          remaining -= 3;
+        }
+      }
+
+      // Then add two euroTransverse2 (2er-quer) pairs
+      for (int i = 0; i < 2; i++) {
+        if (usedLength + TrailerConstants.euroWidthCm <= trailerLengthCm) {
+          rows.add(
+            LoadRow(
+              index: rowIndex++,
+              arrangement: RowArrangement.euroTransverse2,
+              palletCount: 2,
+              weight: 0,
+            ),
+          );
+          usedLength += TrailerConstants.euroWidthCm;
+          remaining -= 2;
+        }
+      }
+      return usedLength;
+    }
+
+    // Standard path: 3er-Reihen, dann 2er-Reihe, dann 1er-Palette
     while (remaining >= 3 &&
         usedLength + TrailerConstants.euroLengthCm <= trailerLengthCm) {
-      rows.add(LoadRow(
-        index: rowIndex++,
-        arrangement: RowArrangement.euroLongi3,
-        palletCount: 3,
-        weight: 0,
-      ));
+      rows.add(
+        LoadRow(
+          index: rowIndex++,
+          arrangement: RowArrangement.euroLongi3,
+          palletCount: 3,
+          weight: 0,
+        ),
+      );
       usedLength += TrailerConstants.euroLengthCm;
       remaining -= 3;
     }
 
     if (remaining >= 2 &&
         usedLength + TrailerConstants.euroWidthCm <= trailerLengthCm) {
-      rows.add(LoadRow(
-        index: rowIndex++,
-        arrangement: RowArrangement.euroTransverse2,
-        palletCount: 2,
-        weight: 0,
-      ));
+      rows.add(
+        LoadRow(
+          index: rowIndex++,
+          arrangement: RowArrangement.euroTransverse2,
+          palletCount: 2,
+          weight: 0,
+        ),
+      );
       usedLength += TrailerConstants.euroWidthCm;
       remaining -= 2;
     }
 
     if (remaining == 1 &&
         usedLength + TrailerConstants.euroWidthCm <= trailerLengthCm) {
-      rows.add(LoadRow(
-        index: rowIndex++,
-        arrangement: RowArrangement.euroTransverseSingle,
-        palletCount: 1,
-        weight: 0,
-      ));
+      rows.add(
+        LoadRow(
+          index: rowIndex++,
+          arrangement: RowArrangement.euroTransverseSingle,
+          palletCount: 1,
+          weight: 0,
+        ),
+      );
       usedLength += TrailerConstants.euroWidthCm;
     }
 
@@ -666,15 +764,13 @@ class PalletLayoutEngine {
       final used3 = n3 * l3;
       final remPal2 = totalPallets - 3 * n3;
       final remSpace2 = available - used3;
-      final maxN2 =
-          (remSpace2 / l2).floor().clamp(0, remPal2 ~/ 2).clamp(0, 4);
+      final maxN2 = (remSpace2 / l2).floor().clamp(0, remPal2 ~/ 2).clamp(0, 4);
 
       for (int n2 = 0; n2 <= maxN2; n2++) {
         final used23 = used3 + n2 * l2;
         final remPal1 = remPal2 - 2 * n2;
         final remSpace1 = available - used23;
-        final maxN1 =
-            (remSpace1 / l1).floor().clamp(0, remPal1).clamp(0, 2);
+        final maxN1 = (remSpace1 / l1).floor().clamp(0, remPal1).clamp(0, 2);
 
         for (int n1 = 0; n1 <= maxN1; n1++) {
           final palletsUsed = 3 * n3 + 2 * n2 + n1;
@@ -683,7 +779,8 @@ class PalletLayoutEngine {
 
           final totalUsed = startUsedLength + used23 + n1 * l1;
 
-          final better = palletsUsed > bestPallets ||
+          final better =
+              palletsUsed > bestPallets ||
               (palletsUsed == bestPallets && n3 > bestN3) ||
               (palletsUsed == bestPallets && n3 == bestN3 && n1 < bestN1) ||
               (palletsUsed == bestPallets &&
@@ -714,28 +811,34 @@ class PalletLayoutEngine {
 
     int rowIndex = startIndex;
     for (int i = 0; i < bestN1; i++) {
-      rows.add(LoadRow(
-        index: rowIndex++,
-        arrangement: RowArrangement.euroTransverseSingle,
-        palletCount: 1,
-        weight: 0,
-      ));
+      rows.add(
+        LoadRow(
+          index: rowIndex++,
+          arrangement: RowArrangement.euroTransverseSingle,
+          palletCount: 1,
+          weight: 0,
+        ),
+      );
     }
     for (int i = 0; i < bestN2; i++) {
-      rows.add(LoadRow(
-        index: rowIndex++,
-        arrangement: RowArrangement.euroTransverse2,
-        palletCount: 2,
-        weight: 0,
-      ));
+      rows.add(
+        LoadRow(
+          index: rowIndex++,
+          arrangement: RowArrangement.euroTransverse2,
+          palletCount: 2,
+          weight: 0,
+        ),
+      );
     }
     for (int i = 0; i < bestN3; i++) {
-      rows.add(LoadRow(
-        index: rowIndex++,
-        arrangement: RowArrangement.euroLongi3,
-        palletCount: 3,
-        weight: 0,
-      ));
+      rows.add(
+        LoadRow(
+          index: rowIndex++,
+          arrangement: RowArrangement.euroLongi3,
+          palletCount: 3,
+          weight: 0,
+        ),
+      );
     }
 
     return {'usedLength': bestLength};
@@ -755,24 +858,28 @@ class PalletLayoutEngine {
 
     while (remaining >= 2 &&
         usedLength + TrailerConstants.industryWidthCm <= trailerLengthCm) {
-      rows.add(LoadRow(
-        index: rowIndex++,
-        arrangement: RowArrangement.industryLongi2,
-        palletCount: 2,
-        weight: 0,
-      ));
+      rows.add(
+        LoadRow(
+          index: rowIndex++,
+          arrangement: RowArrangement.industryLongi2,
+          palletCount: 2,
+          weight: 0,
+        ),
+      );
       usedLength += TrailerConstants.industryWidthCm;
       remaining -= 2;
     }
 
     if (remaining == 1 &&
         usedLength + TrailerConstants.industryLengthCm <= trailerLengthCm) {
-      rows.add(LoadRow(
-        index: rowIndex++,
-        arrangement: RowArrangement.industrySingle,
-        palletCount: 1,
-        weight: 0,
-      ));
+      rows.add(
+        LoadRow(
+          index: rowIndex++,
+          arrangement: RowArrangement.industrySingle,
+          palletCount: 1,
+          weight: 0,
+        ),
+      );
       usedLength += TrailerConstants.industryLengthCm;
     }
 
@@ -802,8 +909,9 @@ class PalletLayoutEngine {
       );
     }
 
-    final safeEuro =
-        euroPallets.clamp(0, maxEuroPallets).clamp(0, trailerType.maxEuroPallets);
+    final safeEuro = euroPallets
+        .clamp(0, maxEuroPallets)
+        .clamp(0, trailerType.maxEuroPallets);
     final safeIndustry = industryPallets.clamp(0, maxIndustryPallets);
     final trailerLengthCm = trailerType.trailerLengthCm;
 
@@ -828,12 +936,14 @@ class PalletLayoutEngine {
         continue;
       }
 
-      rows.add(LoadRow(
-        index: rows.length,
-        arrangement: arrangement,
-        palletCount: needed,
-        weight: 0,
-      ));
+      rows.add(
+        LoadRow(
+          index: rows.length,
+          arrangement: arrangement,
+          palletCount: needed,
+          weight: 0,
+        ),
+      );
       usedLength += arrangement.lengthCm;
       if (isEuro) {
         remainingEuro -= needed;
@@ -853,29 +963,52 @@ class PalletLayoutEngine {
         );
         if (seq != null) {
           for (final arr in seq) {
-            rows.add(LoadRow(
+            rows.add(
+              LoadRow(
                 index: rows.length,
                 arrangement: arr,
                 palletCount: arr.palletCount,
-                weight: 0));
+                weight: 0,
+              ),
+            );
             usedLength += arr.lengthCm;
           }
         } else {
           usedLength = _addEuroPallets(
-              rows, remainingEuro, rows.length, usedLength, trailerLengthCm);
+            rows,
+            remainingEuro,
+            rows.length,
+            usedLength,
+            trailerLengthCm,
+          );
         }
       } else if (optimizeAxleLoad) {
         final result = _addEuroPalletsExact(
-            rows, remainingEuro, rows.length, usedLength, trailerLengthCm);
+          rows,
+          remainingEuro,
+          rows.length,
+          usedLength,
+          trailerLengthCm,
+        );
         if (result['fallback'] == true) {
           usedLength = _addEuroPallets(
-              rows, remainingEuro, rows.length, usedLength, trailerLengthCm);
+            rows,
+            remainingEuro,
+            rows.length,
+            usedLength,
+            trailerLengthCm,
+          );
         } else {
           usedLength = result['usedLength'] as double;
         }
       } else {
         usedLength = _addEuroPallets(
-            rows, remainingEuro, rows.length, usedLength, trailerLengthCm);
+          rows,
+          remainingEuro,
+          rows.length,
+          usedLength,
+          trailerLengthCm,
+        );
       }
     }
 
@@ -886,7 +1019,12 @@ class PalletLayoutEngine {
     // Phase 3: Verbleibende Industrie-Paletten auffüllen
     if (remainingIndustry > 0) {
       usedLength = _addIndustryPallets(
-          rows, remainingIndustry, rows.length, usedLength, trailerLengthCm);
+        rows,
+        remainingIndustry,
+        rows.length,
+        usedLength,
+        trailerLengthCm,
+      );
     }
 
     final placedIndustry = rows
@@ -909,7 +1047,7 @@ class PalletLayoutEngine {
       hasManualSeedWarning: seedWarning,
       manualSeedWarningText: seedWarning
           ? 'Folgende Seed-Reihen konnten nicht platziert werden: '
-              '${skippedLabels.join(', ')}'
+                '${skippedLabels.join(', ')}'
           : '',
     );
   }
